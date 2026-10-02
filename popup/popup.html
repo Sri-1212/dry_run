@@ -44,7 +44,7 @@
       </div>
     </section>
 
-    <!-- 🔍 VERIFICATION PREVIEW BANNER (Requirement 8) -->
+    <!-- 🔍 VERIFICATION PREVIEW BANNER -->
     <section id="verification-banner" class="verification-banner hidden">
       <div class="verification-header">
         <div class="verification-title">
@@ -68,7 +68,7 @@
       </div>
     </section>
 
-    <!-- 📝 MANUAL CODE FALLBACK SECTION (Requirement 7) -->
+    <!-- 📝 MANUAL CODE FALLBACK SECTION -->
     <section id="manual-fallback-section" class="manual-fallback-bar hidden">
       <div class="fallback-header">
         <span class="fallback-icon">📋</span>
@@ -91,24 +91,30 @@
         <div class="form-group">
           <label for="api-provider">Execution Engine:</label>
           <select id="api-provider" class="custom-select">
-            <option value="interpreter">Built-in C++ Interpreter (No API Key needed)</option>
-            <option value="gemini">Gemini API (AI Line Trace)</option>
-            <option value="openai">OpenAI API (GPT-4o)</option>
+            <option value="gemini">Gemini API (AI Execution Tracer)</option>
+            <option value="interpreter">Built-in C++ Interpreter (Client-side)</option>
           </select>
         </div>
 
-        <div id="api-key-group" class="form-group hidden">
-          <label for="api-key">API Key:</label>
+        <div id="gemini-key-group" class="form-group">
+          <div class="label-with-status">
+            <label for="gemini-api-key">Gemini API Key:</label>
+            <span id="key-saved-status" class="key-status-badge unconfigured">Not Set</span>
+          </div>
           <div class="input-with-btn">
-            <input type="password" id="api-key" placeholder="Enter API Key (e.g. AIzaSy...)" autocomplete="off">
+            <input type="password" id="gemini-api-key" placeholder="Enter Gemini API Key (AIzaSy...)" autocomplete="off">
             <button id="toggle-key-visibility" class="btn-mini" type="button">👁️</button>
           </div>
-          <small class="help-text">Stored securely in your local Chrome browser storage.</small>
+          <small class="help-text">Saved securely in <code>chrome.storage.local</code>. Never hardcoded or committed.</small>
         </div>
 
-        <div id="model-name-group" class="form-group hidden">
-          <label for="model-name">Model Name:</label>
-          <input type="text" id="model-name" value="gemini-1.5-pro" placeholder="Model name">
+        <div id="model-name-group" class="form-group">
+          <label for="model-name">Gemini Model:</label>
+          <select id="model-name" class="custom-select">
+            <option value="gemini-1.5-flash">gemini-1.5-flash (Recommended)</option>
+            <option value="gemini-1.5-pro">gemini-1.5-pro (Deep Analysis)</option>
+            <option value="gemini-2.0-flash">gemini-2.0-flash</option>
+          </select>
         </div>
 
         <div class="form-group">
@@ -148,7 +154,7 @@
       <div id="state-idle" class="state-container active">
         <div class="idle-placeholder">
           <div class="dragon-placeholder-icon">🐉</div>
-          <p>Ready to dry run! Click <strong>START STEP-BY-STEP DRY RUN</strong> above to simulate your C++ LeetCode solution.</p>
+          <p>Ready to dry run! Click <strong>START STEP-BY-STEP DRY RUN</strong> above to trace your C++ LeetCode solution.</p>
         </div>
       </div>
 
@@ -159,8 +165,8 @@
             <span class="spinner-ring"></span>
             <span class="spinner-icon">🐉</span>
           </div>
-          <h3>Simulating C++ Execution...</h3>
-          <p id="loading-message">Reading Monaco editor C++ code and generating trace steps...</p>
+          <h3>Tracing C++ Execution...</h3>
+          <p id="loading-message">Sending code & input to Gemini API for step-by-step tracing...</p>
         </div>
       </div>
 
@@ -171,10 +177,10 @@
             <span class="error-icon">⚠️</span>
             <h3>Dry Run Execution Error</h3>
           </div>
-          <p id="error-message-text" class="error-text">Failed to extract C++ solution code.</p>
+          <p id="error-message-text" class="error-text">Failed to execute dry run.</p>
           <div class="error-actions">
             <button id="error-retry-btn" class="btn-secondary">🔄 Try Again</button>
-            <button id="toggle-fallback-btn" class="btn-primary">📋 Open Manual Paste Input</button>
+            <button id="switch-interpreter-btn" class="btn-primary">⚡ Use Built-in Interpreter</button>
           </div>
         </div>
       </div>

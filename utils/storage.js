@@ -4,15 +4,13 @@
  */
 
 export const DEFAULT_SETTINGS = {
-  apiKey: '',
-  apiProvider: 'gemini', // 'gemini' | 'openai' | 'interpreter'
-  modelName: 'gemini-1.5-pro',
+  apiProvider: 'gemini', // 'gemini' | 'interpreter'
+  modelName: 'gemini-1.5-flash',
   theme: 'dark-dragon',
   stepSpeedMs: 800,
   autoTrace: true,
   showMemoryGraph: true,
-  maxSteps: 50,
-  cppStandard: 'c++20'
+  maxSteps: 40
 };
 
 export class StorageService {
@@ -47,6 +45,35 @@ export class StorageService {
   }
 
   /**
+   * Save Gemini API key securely in chrome.storage.local
+   */
+  static async saveGeminiApiKey(key) {
+    return new Promise((resolve) => {
+      if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
+        chrome.storage.local.set({ geminiApiKey: key }, () => resolve());
+      } else {
+        localStorage.setItem('geminiApiKey', key);
+        resolve();
+      }
+    });
+  }
+
+  /**
+   * Retrieve Gemini API key from chrome.storage.local
+   */
+  static async getGeminiApiKey() {
+    return new Promise((resolve) => {
+      if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
+        chrome.storage.local.get(['geminiApiKey'], (result) => {
+          resolve(result.geminiApiKey || '');
+        });
+      } else {
+        resolve(localStorage.getItem('geminiApiKey') || '');
+      }
+    });
+  }
+
+  /**
    * Save last used sample input for a specific problem slug
    */
   static async saveSampleInput(problemSlug, inputData) {
@@ -75,25 +102,5 @@ export class StorageService {
         resolve(localStorage.getItem(key) || '');
       }
     });
-  }
-
-  /**
-   * Save execution history / cache
-   */
-  static async saveCache(problemSlug, code, input, steps) {
-    const key = `cache_${problemSlug}_${this.hashCode(code + input)}`;
-    const cacheData = { timestamp: Date.now(), steps };
-    if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
-      chrome.storage.local.set({ [key]: cacheData });
-    }
-  }
-
-  static hashCode(str) {
-    let hash = 0;
-    for (let i = 0; i < str.length; i++) {
-      hash = ((hash << 5) - hash) + str.charCodeAt(i);
-      hash |= 0;
-    }
-    return hash;
   }
 }

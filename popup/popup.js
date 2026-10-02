@@ -1,6 +1,7 @@
 /**
  * Popup Logic for Dry Run Chrome Extension
- * Direct LeetCode Monaco Editor integration using chrome.scripting.executeScript (world: MAIN).
+ * Direct LeetCode Monaco Editor integration using chrome.scripting.executeScript (world: MAIN)
+ * and Gemini AI execution tracing via background service worker.
  */
 
 import { StorageService } from '../utils/storage.js';
@@ -15,8 +16,9 @@ document.addEventListener('DOMContentLoaded', async () => {
   const toggleSettingsBtn = document.getElementById('toggle-settings-btn');
   const settingsSection = document.getElementById('settings-section');
   const apiProviderSelect = document.getElementById('api-provider');
-  const apiKeyGroup = document.getElementById('api-key-group');
-  const apiKeyInput = document.getElementById('api-key');
+  const geminiKeyGroup = document.getElementById('gemini-key-group');
+  const geminiApiKeyInput = document.getElementById('gemini-api-key');
+  const keySavedStatus = document.getElementById('key-saved-status');
   const toggleKeyVisibilityBtn = document.getElementById('toggle-key-visibility');
   const modelNameGroup = document.getElementById('model-name-group');
   const modelNameInput = document.getElementById('model-name');
@@ -25,14 +27,14 @@ document.addEventListener('DOMContentLoaded', async () => {
   const sampleInputArea = document.getElementById('sample-input');
   const startDryRunBtn = document.getElementById('start-dryrun-btn');
 
-  // Verification Banner Elements (Requirement 8)
+  // Verification Banner Elements
   const verificationBanner = document.getElementById('verification-banner');
   const verifyLangBadge = document.getElementById('verify-lang-badge');
   const verifyLengthBadge = document.getElementById('verify-length-badge');
   const verifyCodeSnippet = document.getElementById('verify-code-snippet');
   const verifyPlayBtn = document.getElementById('verify-play-btn');
 
-  // Manual Fallback Elements (Requirement 7)
+  // Manual Fallback Elements
   const manualFallbackSection = document.getElementById('manual-fallback-section');
   const manualCodeInput = document.getElementById('manual-code-input');
   const useManualCodeBtn = document.getElementById('use-manual-code-btn');
@@ -50,7 +52,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   const loadingMessage = document.getElementById('loading-message');
   const errorMessageText = document.getElementById('error-message-text');
   const errorRetryBtn = document.getElementById('error-retry-btn');
-  const toggleFallbackBtn = document.getElementById('toggle-fallback-btn');
+  const switchInterpreterBtn = document.getElementById('switch-interpreter-btn');
 
   // Step Result Controls & Views
   const stepFirstBtn = document.getElementById('step-first');
@@ -73,16 +75,17 @@ document.addEventListener('DOMContentLoaded', async () => {
   // App State Variables
   let currentSettings = {};
   let currentProblemSlug = '';
-  let extractedCppCode = ''; // Full code kept internally for AI trace (Requirement 9)
+  let extractedCppCode = ''; // Full code kept internally for AI trace
   let detectedLanguage = 'C++';
   let traceSteps = [];
   let currentStepIndex = 0;
   let isPlaying = false;
   let playTimer = null;
 
-  // Load Saved Settings
+  // Load Saved Settings & Gemini API Key
   currentSettings = await StorageService.getSettings();
-  applySettingsToUI(currentSettings);
+  const savedApiKey = await StorageService.getGeminiApiKey();
+  applySettingsToUI(currentSettings, savedApiKey);
 
   // Initial Read from Active LeetCode Monaco Editor
   await readMonacoEditorCode();
@@ -96,13 +99,9 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
 
   // --------------------------------------------------------------------------
-  // CORE MONACO EDITOR READER (Requirements 1, 2, 3, 4, 5, 6, 7, 8, 9)
+  // CORE MONACO EDITOR READER
   // --------------------------------------------------------------------------
 
-  /**
-   * Main function to read C++ code directly from LeetCode Monaco editor
-   * using chrome.scripting.executeScript in world: 'MAIN'.
-   */
   async function readMonacoEditorCode() {
     try {
       const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
@@ -121,7 +120,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         return;
       }
 
-      // Execute script in page's MAIN world context to access Monaco instance
+      // Execute script in page's MAIN world context to access active Monaco instance
       const results = await chrome.scripting.executeScript({
         target: { tabId: tab.id },
         world: 'MAIN',
@@ -132,7 +131,6 @@ document.addEventListener('DOMContentLoaded', async () => {
       });
 
       if (!results || !results[0] || !results[0].result) {
-        // Content script fallback if scripting API fails
         const contentRes = await chrome.tabs.sendMessage(tab.id, { action: 'GET_LEETCODE_CODE' }).catch(() => null);
         if (contentRes && contentRes.code) {
           processExtractedCode(contentRes.code, 'C++');
@@ -153,25 +151,22 @@ document.addEventListener('DOMContentLoaded', async () => {
       const rawCode = res.code;
       const rawLang = res.language;
 
-      // Requirement 5: Empty editor check
       if (!rawCode || rawCode.trim().length === 0) {
         showError("LeetCode editor is empty. Please enter or paste your C++ solution.");
         showManualFallback();
         return;
       }
 
-      // Requirement 4: Detect Language & validate C++
       const langNorm = normalizeLanguage(rawLang, rawCode);
       detectedLanguage = langNorm;
       detectedLangChip.textContent = langNorm;
 
       if (!isCppLanguage(langNorm)) {
-        showError("Support C++ only"); // Exact requirement 4 error message
+        showError("Support C++ only");
         showManualFallback();
         return;
       }
 
-      // Requirement 8 & 9: Keep full code internally, display verification banner
       processExtractedCode(rawCode, langNorm);
 
     } catch (err) {
@@ -181,57 +176,67 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
   }
 
-  /**
-   * Function executed directly inside the LeetCode web page context (MAIN world)
-   */
   function extractMonacoFromPage() {
     try {
       let code = '';
       let lang = '';
+      let methodUsed = '';
 
       const m = window.monaco || window.Monaco;
       if (m && m.editor) {
-        const models = m.editor.getModels ? m.editor.getModels() : [];
-        if (models.length > 0) {
-          // Requirement 4 spec check: models[1] or models[0] or getMode
-          let targetModel = models.length > 1 ? models[1] : models[0];
-
-          // Check Monaco.editor.getMode(models[1])[0].getValue pattern if available
-          if (m.editor.getMode && models[1]) {
-            try {
-              const modeRes = m.editor.getMode(models[1]);
-              if (modeRes && modeRes[0] && typeof modeRes[0].getValue === 'function') {
-                code = modeRes[0].getValue();
+        // Strategy 1: Active Monaco Editor instance via monaco.editor.getEditors()
+        if (m.editor.getEditors) {
+          const editors = m.editor.getEditors();
+          for (const ed of editors) {
+            const model = typeof ed.getModel === 'function' ? ed.getModel() : null;
+            if (model) {
+              const val = typeof model.getValue === 'function' ? model.getValue() : '';
+              if (val && val.trim().length > 0) {
+                code = val;
+                lang = typeof model.getLanguageId === 'function' ? model.getLanguageId() : '';
+                methodUsed = 'monaco.editor.getEditors() -> model.getLanguageId() & model.getValue()';
+                break;
               }
-            } catch (e) {}
-          }
-
-          if (!code && targetModel) {
-            if (typeof targetModel.getValue === 'function') {
-              code = targetModel.getValue();
-            }
-            if (typeof targetModel.getLanguageId === 'function') {
-              lang = targetModel.getLanguageId();
             }
           }
         }
 
-        // Active editor fallback
-        if (!code && m.editor.getEditors) {
-          const editors = m.editor.getEditors();
-          for (const ed of editors) {
-            const val = ed.getValue ? ed.getValue() : '';
-            if (val && val.trim().length > 0) {
-              code = val;
-              const model = ed.getModel ? ed.getModel() : null;
-              if (model && model.getLanguageId) lang = model.getLanguageId();
-              break;
+        // Strategy 2: Active model matching C++ or non-empty value via monaco.editor.getModels()
+        if (!code && m.editor.getModels) {
+          const models = m.editor.getModels();
+          if (models && models.length > 0) {
+            let activeModel = models.find(mod => {
+              if (mod && mod.isDisposed && mod.isDisposed()) return false;
+              const lId = typeof mod.getLanguageId === 'function' ? mod.getLanguageId() : '';
+              return lId === 'cpp' || lId === 'c++' || lId === 'cpp20';
+            });
+
+            if (!activeModel) {
+              for (let i = models.length - 1; i >= 0; i--) {
+                const mod = models[i];
+                if (mod && (!mod.isDisposed || !mod.isDisposed())) {
+                  const val = typeof mod.getValue === 'function' ? mod.getValue() : '';
+                  if (val && val.trim().length > 0) {
+                    activeModel = mod;
+                    break;
+                  }
+                }
+              }
+            }
+
+            if (activeModel) {
+              if (typeof activeModel.getValue === 'function') {
+                code = activeModel.getValue();
+              }
+              if (typeof activeModel.getLanguageId === 'function') {
+                lang = activeModel.getLanguageId();
+              }
+              methodUsed = 'monaco.editor.getModels() -> model.getLanguageId() & model.getValue()';
             }
           }
         }
       }
 
-      // Language detection from DOM if model language wasn't explicit
       if (!lang) {
         const langBtn = document.querySelector('button[id*="lang"]') ||
                        document.querySelector('[data-cy="lang-select"]') ||
@@ -243,18 +248,19 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
       }
 
-      // DOM fallback line reader
       if (!code) {
         const viewLines = document.querySelectorAll('.monaco-editor .view-line');
         if (viewLines && viewLines.length > 0) {
           code = Array.from(viewLines).map(l => l.textContent || '').join('\n');
+          methodUsed = 'DOM (.monaco-editor .view-line)';
         }
       }
 
       return {
         success: true,
         code: code || '',
-        language: lang || ''
+        language: lang || '',
+        methodUsed: methodUsed || 'None'
       };
     } catch (e) {
       return { success: false, error: e.toString() };
@@ -263,14 +269,13 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   function normalizeLanguage(rawLang, code) {
     if (!rawLang) {
-      // Infer from code syntax if missing
       if (code.includes('#include') || code.includes('using namespace std') || code.includes('vector<') || code.includes('class Solution')) {
         return 'C++';
       }
       if (code.includes('def ') || code.includes('import ')) return 'Python';
       if (code.includes('public class ') || code.includes('System.out')) return 'Java';
       if (code.includes('function ') || code.includes('const ') || code.includes('let ')) return 'JavaScript';
-      return 'C++'; // default to C++ if ambiguous
+      return 'C++';
     }
 
     const lower = rawLang.toLowerCase().trim();
@@ -278,12 +283,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (lower.includes('python')) return 'Python';
     if (lower.includes('java')) return 'Java';
     if (lower.includes('javascript') || lower.includes('js')) return 'JavaScript';
-    if (lower.includes('typescript') || lower.includes('ts')) return 'TypeScript';
-    if (lower.includes('golang') || lower.includes('go')) return 'Go';
-    if (lower.includes('rust')) return 'Rust';
-    if (lower === 'c') return 'C';
-    if (lower.includes('c#') || lower.includes('csharp')) return 'C#';
-
     return rawLang;
   }
 
@@ -292,23 +291,18 @@ document.addEventListener('DOMContentLoaded', async () => {
     return l.includes('c++') || l.includes('cpp') || l.includes('g++');
   }
 
-  /**
-   * Process and verify extracted code (Requirement 8 & 9)
-   */
   function processExtractedCode(code, lang) {
-    extractedCppCode = code; // Full code available internally for AI trace (Requirement 9)
+    extractedCppCode = code;
     hideManualFallback();
 
     const lines = code.split('\n');
     const firstFewLines = lines.slice(0, 4).join('\n');
 
-    // Requirement 8: Display Verification Banner with "Play", "Detect Language", and "Code Length"
     verifyLangBadge.textContent = lang;
     verifyLengthBadge.textContent = `${code.length} chars (${lines.length} lines)`;
     verifyCodeSnippet.textContent = firstFewLines || code.substring(0, 100);
     verificationBanner.classList.remove('hidden');
 
-    // Reset error state if active
     if (stateError.classList.contains('active')) {
       switchState('idle');
     }
@@ -331,7 +325,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
 
   // --------------------------------------------------------------------------
-  // EVENT HANDLERS
+  // EVENT HANDLERS & SETTINGS
   // --------------------------------------------------------------------------
 
   // Sync / Re-read Monaco Editor Code
@@ -343,12 +337,10 @@ document.addEventListener('DOMContentLoaded', async () => {
     fetchCodeBtn.textContent = '🔄 Read Editor';
   });
 
-  // Play Verification Button
   verifyPlayBtn.addEventListener('click', () => {
     startDryRun();
   });
 
-  // Use Manual Code Button (Requirement 7)
   useManualCodeBtn.addEventListener('click', () => {
     const manualCode = manualCodeInput.value.trim();
     if (!manualCode) {
@@ -359,35 +351,34 @@ document.addEventListener('DOMContentLoaded', async () => {
     startDryRun();
   });
 
-  toggleFallbackBtn.addEventListener('click', () => {
-    showManualFallback();
-  });
-
-  // Toggle Settings Panel
   toggleSettingsBtn.addEventListener('click', () => {
     settingsSection.classList.toggle('hidden');
   });
 
-  // Provider Select Change
   apiProviderSelect.addEventListener('change', () => {
     const val = apiProviderSelect.value;
     if (val === 'interpreter') {
-      apiKeyGroup.classList.add('hidden');
+      geminiKeyGroup.classList.add('hidden');
       modelNameGroup.classList.add('hidden');
     } else {
-      apiKeyGroup.classList.remove('hidden');
+      geminiKeyGroup.classList.remove('hidden');
       modelNameGroup.classList.remove('hidden');
-      if (val === 'gemini') modelNameInput.value = 'gemini-1.5-pro';
-      if (val === 'openai') modelNameInput.value = 'gpt-4o-mini';
     }
     saveCurrentSettings();
   });
 
   toggleKeyVisibilityBtn.addEventListener('click', () => {
-    apiKeyInput.type = apiKeyInput.type === 'password' ? 'text' : 'password';
+    geminiApiKeyInput.type = geminiApiKeyInput.type === 'password' ? 'text' : 'password';
   });
 
-  [apiKeyInput, modelNameInput, stepSpeedInput].forEach(el => {
+  // Save Gemini API Key securely in chrome.storage.local
+  geminiApiKeyInput.addEventListener('input', async () => {
+    const val = geminiApiKeyInput.value.trim();
+    await StorageService.saveGeminiApiKey(val);
+    updateKeyStatusBadge(val);
+  });
+
+  [modelNameInput, stepSpeedInput].forEach(el => {
     el.addEventListener('input', () => {
       speedLabel.textContent = `${stepSpeedInput.value}ms`;
       saveCurrentSettings();
@@ -415,6 +406,13 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   errorRetryBtn.addEventListener('click', () => {
     readMonacoEditorCode();
+  });
+
+  switchInterpreterBtn.addEventListener('click', () => {
+    apiProviderSelect.value = 'interpreter';
+    saveCurrentSettings();
+    applySettingsToUI(currentSettings, geminiApiKeyInput.value);
+    startDryRun();
   });
 
   // START DRY RUN BUTTON
@@ -452,7 +450,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   });
 
   // --------------------------------------------------------------------------
-  // EXECUTION & RENDERING PIPELINE
+  // EXECUTION PIPELINE (AI Tracing via Background SW & Local Interpreter Fallback)
   // --------------------------------------------------------------------------
 
   async function startDryRun() {
@@ -474,34 +472,58 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     switchState('loading');
-    loadingMessage.textContent = `Analyzing Monaco C++ solution code & simulating step trace...`;
 
-    try {
-      const input = sampleInputArea.value;
-      const options = {
-        apiKey: apiKeyInput.value.trim(),
-        apiProvider: apiProviderSelect.value,
-        modelName: modelNameInput.value.trim()
-      };
+    const provider = apiProviderSelect.value;
+    const input = sampleInputArea.value;
 
-      // Full code passed internally to tracer (Requirement 9)
-      traceSteps = await CppDryRunner.execute(extractedCppCode, input, options);
+    if (provider === 'gemini') {
+      loadingMessage.textContent = `Sending code & input to Gemini API for AI step-by-step trace...`;
+      
+      // Call Background Service Worker to execute Gemini AI tracing
+      const response = await new Promise((resolve) => {
+        chrome.runtime.sendMessage({
+          action: 'GENERATE_AI_TRACE',
+          code: extractedCppCode,
+          input: input,
+          modelName: modelNameInput.value
+        }, (res) => resolve(res || { success: false, error: "Service Worker did not respond." }));
+      });
 
-      if (!traceSteps || traceSteps.length === 0) {
-        throw new Error("No trace execution steps generated.");
+      if (!response.success) {
+        showError(response.error || "Failed to generate AI execution trace.");
+        return;
       }
 
-      currentStepIndex = 0;
-      stepSlider.max = traceSteps.length;
-      totalStepsNumEl.textContent = traceSteps.length;
+      const traceData = response.trace;
+      traceSteps = traceData.steps || [];
+      const finalOutput = traceData.output || "Execution completed";
 
-      renderCodeViewer(extractedCppCode);
-      renderStep(currentStepIndex);
-      switchState('result');
-    } catch (err) {
-      console.error('[DryRun Popup] Execution error:', err);
-      showError(err.message || 'An unknown error occurred during C++ dry run.');
+      if (traceSteps.length === 0) {
+        showError("AI generated an empty execution trace.");
+        return;
+      }
+
+      // Attach overall output to last step
+      traceSteps[traceSteps.length - 1].output = finalOutput;
+
+    } else {
+      // Built-in C++ Interpreter execution
+      loadingMessage.textContent = `Simulating local C++ execution trace...`;
+      try {
+        traceSteps = CppDryRunner.simulateLocalCpp(extractedCppCode, input);
+      } catch (err) {
+        showError(`Local Interpreter Error: ${err.message}`);
+        return;
+      }
     }
+
+    currentStepIndex = 0;
+    stepSlider.max = traceSteps.length;
+    totalStepsNumEl.textContent = traceSteps.length;
+
+    renderCodeViewer(extractedCppCode);
+    renderStep(currentStepIndex);
+    switchState('result');
   }
 
   function renderStep(idx) {
@@ -512,22 +534,23 @@ document.addEventListener('DOMContentLoaded', async () => {
     currentStepNumEl.textContent = `Step ${idx + 1}`;
     stepSlider.value = idx + 1;
 
-    lineNumBadge.textContent = `Line ${step.lineNumber || 1}`;
+    const lineNum = step.line || step.lineNumber || 1;
+    lineNumBadge.textContent = `Line ${lineNum}`;
     stepExplanation.textContent = step.explanation || 'Executing C++ line statement.';
 
-    highlightCodeLine(step.lineNumber || 1);
+    highlightCodeLine(lineNum);
 
-    // Highlight live on LeetCode Monaco editor DOM
+    // Highlight line live on LeetCode Monaco editor DOM
     chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
       if (tabs && tabs[0] && tabs[0].url.includes('leetcode.com')) {
         chrome.tabs.sendMessage(tabs[0].id, {
           action: 'HIGHLIGHT_LINE',
-          lineNumber: step.lineNumber || 1
+          lineNumber: lineNum
         }).catch(() => {});
       }
     });
 
-    renderVariables(step.variables || {}, step.memoryHighlight || []);
+    renderVariables(step.variables || {});
     renderCallStack(step.callStack || ['Solution::solve()']);
     outputText.textContent = step.output || '--';
   }
@@ -568,7 +591,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
   }
 
-  function renderVariables(variablesObj, highlightArray = []) {
+  function renderVariables(variablesObj) {
     variableTableBody.innerHTML = '';
     const keys = Object.keys(variablesObj);
 
@@ -579,12 +602,9 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     keys.forEach(key => {
       const tr = document.createElement('tr');
-      if (highlightArray.includes(key)) {
-        tr.classList.add('var-modified');
-      }
-
-      const valStr = typeof variablesObj[key] === 'object' ? JSON.stringify(variablesObj[key]) : String(variablesObj[key]);
-      const typeStr = getTypeStr(variablesObj[key]);
+      const val = variablesObj[key];
+      const valStr = typeof val === 'object' ? JSON.stringify(val) : String(val);
+      const typeStr = getTypeStr(val);
 
       tr.innerHTML = `
         <td class="var-name">${key}</td>
@@ -596,9 +616,11 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
 
   function getTypeStr(val) {
-    if (Array.isArray(val) || (typeof val === 'string' && val.startsWith('['))) return 'vector<int>';
-    if (typeof val === 'number') return 'int';
+    if (Array.isArray(val)) return 'vector / array';
+    if (typeof val === 'object' && val !== null) return 'map / struct';
+    if (typeof val === 'number') return Number.isInteger(val) ? 'int' : 'double';
     if (typeof val === 'boolean') return 'bool';
+    if (typeof val === 'string') return 'string';
     return 'auto';
   }
 
@@ -663,26 +685,42 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (stateName === 'result') stateResult.classList.add('active');
   }
 
-  function applySettingsToUI(s) {
-    apiProviderSelect.value = s.apiProvider || 'interpreter';
-    apiKeyInput.value = s.apiKey || '';
-    modelNameInput.value = s.modelName || 'gemini-1.5-pro';
+  function applySettingsToUI(s, apiKey) {
+    apiProviderSelect.value = s.apiProvider || 'gemini';
+    modelNameInput.value = s.modelName || 'gemini-1.5-flash';
     stepSpeedInput.value = s.stepSpeedMs || 800;
     speedLabel.textContent = `${stepSpeedInput.value}ms`;
 
+    if (apiKey) {
+      geminiApiKeyInput.value = apiKey;
+      updateKeyStatusBadge(apiKey);
+    } else {
+      geminiApiKeyInput.value = '';
+      updateKeyStatusBadge('');
+    }
+
     if (s.apiProvider === 'interpreter') {
-      apiKeyGroup.classList.add('hidden');
+      geminiKeyGroup.classList.add('hidden');
       modelNameGroup.classList.add('hidden');
     } else {
-      apiKeyGroup.classList.remove('hidden');
+      geminiKeyGroup.classList.remove('hidden');
       modelNameGroup.classList.remove('hidden');
+    }
+  }
+
+  function updateKeyStatusBadge(key) {
+    if (key && key.length > 5) {
+      keySavedStatus.textContent = '✅ Key Saved';
+      keySavedStatus.className = 'key-status-badge configured';
+    } else {
+      keySavedStatus.textContent = 'Not Set';
+      keySavedStatus.className = 'key-status-badge unconfigured';
     }
   }
 
   function saveCurrentSettings() {
     currentSettings = {
       apiProvider: apiProviderSelect.value,
-      apiKey: apiKeyInput.value.trim(),
       modelName: modelNameInput.value.trim(),
       stepSpeedMs: parseInt(stepSpeedInput.value)
     };
