@@ -1,0 +1,52 @@
+{
+  "manifest_version": 3,
+  "name": "Dry Run - LeetCode C++ Visualizer",
+  "short_name": "DryRun",
+  "version": "1.0.0",
+  "description": "Step-by-step dry run visualizer for C++ code on LeetCode. Track variables, inspect memory, and test custom sample inputs live.",
+  "permissions": [
+    "storage",
+    "activeTab",
+    "scripting"
+  ],
+  "host_permissions": [
+    "https://leetcode.com/*",
+    "https://leetcode.cn/*"
+  ],
+  "background": {
+    "service_worker": "background/background.js",
+    "type": "module"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://leetcode.com/problems/*",
+        "https://leetcode.cn/problems/*"
+      ],
+      "js": ["content/content.js"],
+      "css": ["content/content.css"],
+      "run_at": "document_idle"
+    }
+  ],
+  "action": {
+    "default_popup": "popup/popup.html",
+    "default_title": "Dry Run - LeetCode C++ Visualizer 🐉",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    }
+  },
+  "devtools_page": "devtools/devtools.html",
+  "web_accessible_resources": [
+    {
+      "resources": ["content/monaco_bridge.js", "icons/*"],
+      "matches": ["https://leetcode.com/*", "https://leetcode.cn/*"]
+    }
+  ],
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  }
+}

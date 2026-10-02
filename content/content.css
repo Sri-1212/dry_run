@@ -1,0 +1,138 @@
+/* Content Script Overlay Styles for LeetCode */
+
+#dryrun-dragon-badge {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  z-index: 999999;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 18px;
+  background: linear-gradient(135deg, #0f172a 0%, #1e1b4b 50%, #4c1d95 100%);
+  color: #f8fafc;
+  border: 1px solid rgba(168, 85, 247, 0.4);
+  border-radius: 9999px;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  box-shadow: 0 10px 25px -5px rgba(124, 58, 237, 0.5), 0 0 15px rgba(236, 72, 153, 0.3);
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  backdrop-filter: blur(8px);
+}
+
+#dryrun-dragon-badge:hover {
+  transform: translateY(-3px) scale(1.05);
+  box-shadow: 0 15px 35px -5px rgba(124, 58, 237, 0.7), 0 0 25px rgba(236, 72, 153, 0.5);
+  border-color: rgba(236, 72, 153, 0.7);
+}
+
+#dryrun-dragon-badge .dragon-icon {
+  font-size: 18px;
+  filter: drop-shadow(0 0 5px #ec4899);
+  animation: pulse-dragon 2s infinite ease-in-out;
+}
+
+@keyframes pulse-dragon {
+  0%, 100% { transform: scale(1); filter: drop-shadow(0 0 4px #ec4899); }
+  50% { transform: scale(1.2); filter: drop-shadow(0 0 10px #8b5cf6); }
+}
+
+/* In-Page Slide Panel */
+#dryrun-inpage-panel {
+  position: fixed;
+  top: 70px;
+  right: 20px;
+  width: 380px;
+  max-height: calc(100vh - 100px);
+  z-index: 999998;
+  background: #0f172a;
+  border: 1px solid #334155;
+  border-radius: 12px;
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.8);
+  display: flex;
+  flex-direction: column;
+  color: #e2e8f0;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  overflow: hidden;
+}
+
+.dryrun-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 16px;
+  background: #1e293b;
+  border-bottom: 1px solid #334155;
+}
+
+.dryrun-title {
+  font-weight: 700;
+  color: #f472b6;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.dryrun-close-btn {
+  background: transparent;
+  border: none;
+  color: #94a3b8;
+  font-size: 16px;
+  cursor: pointer;
+  border-radius: 4px;
+  padding: 2px 6px;
+}
+
+.dryrun-close-btn:hover {
+  color: #fff;
+  background: #334155;
+}
+
+.dryrun-panel-body {
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.dryrun-status {
+  font-size: 13px;
+  line-height: 1.5;
+  color: #94a3b8;
+}
+
+.dryrun-action-btn {
+  background: #6366f1;
+  color: #fff;
+  border: none;
+  padding: 8px 12px;
+  border-radius: 6px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.dryrun-action-btn:hover {
+  background: #4f46e5;
+}
+
+.dryrun-preview-box {
+  background: #020617;
+  border: 1px solid #1e293b;
+  padding: 10px;
+  border-radius: 6px;
+  font-family: 'Consolas', 'Courier New', monospace;
+  font-size: 11px;
+  max-height: 180px;
+  overflow-y: auto;
+  color: #38bdf8;
+  white-space: pre-wrap;
+}
+
+/* Active line highlight overlay in Monaco */
+.monaco-editor .view-line.dryrun-active-line {
+  background: rgba(236, 72, 153, 0.25) !important;
+  border-left: 3px solid #ec4899 !important;
+}
