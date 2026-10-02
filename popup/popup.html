@@ -191,14 +191,21 @@
         <!-- STEP CONTROLS BAR -->
         <div class="step-controls-bar">
           <div class="control-buttons">
-            <button id="step-first" class="ctrl-btn" title="First Step">⏮</button>
+            <button id="step-first" class="ctrl-btn" title="First Step (Home)">⏮</button>
             <button id="step-prev" class="ctrl-btn" title="Previous Step (Left Arrow)">◀</button>
-            <button id="step-play" class="ctrl-btn play-btn" title="Play / Pause Auto Step">▶</button>
+            <button id="step-play" class="ctrl-btn play-btn" title="Play / Pause Auto Step (Space)">▶</button>
             <button id="step-next" class="ctrl-btn" title="Next Step (Right Arrow)">▶</button>
-            <button id="step-last" class="ctrl-btn" title="Last Step">⏭</button>
+            <button id="step-last" class="ctrl-btn" title="Last Step (End)">⏭</button>
           </div>
           <div class="step-counter">
             <span id="current-step-num">Step 1</span> / <span id="total-steps-num">10</span>
+          </div>
+        </div>
+
+        <!-- PROGRESS BAR -->
+        <div class="progress-bar-wrapper">
+          <div class="progress-bar-track">
+            <div id="progress-bar-fill" class="progress-bar-fill" style="width: 10%;"></div>
           </div>
         </div>
 
@@ -215,7 +222,7 @@
         <!-- C++ CODE VIEWER WITH HIGHLIGHTED ACTIVE LINE -->
         <div class="code-viewer-container">
           <div class="code-header">
-            <span>C++ Source Line Execution</span>
+            <span>💻 C++ Source Code Execution</span>
             <span id="active-line-indicator" class="active-line-indicator">Line 1</span>
           </div>
           <div id="code-lines-box" class="code-lines-box">
@@ -226,8 +233,8 @@
         <!-- VARIABLE MEMORY STATE TABLE -->
         <div class="memory-state-container">
           <div class="memory-header">
-            <span>Variable Memory Tracker</span>
-            <span class="memory-badge">Stack Frame</span>
+            <span>📊 Variable Memory State</span>
+            <span id="changed-vars-badge" class="memory-badge">Step Scope</span>
           </div>
           <table class="variable-table">
             <thead>
@@ -252,9 +259,17 @@
             </div>
           </div>
           <div class="output-card">
-            <span class="card-label">Return / Stdout:</span>
+            <span class="card-label">Step Output:</span>
             <div id="output-text" class="output-text">--</div>
           </div>
+        </div>
+
+        <!-- 🏁 FINAL OUTPUT CARD (Visible on final step or completion) -->
+        <div id="final-output-card" class="final-output-card hidden">
+          <div class="final-output-header">
+            <span class="final-output-badge">🏁 FINAL EXECUTION OUTPUT</span>
+          </div>
+          <div id="final-output-text" class="final-output-text">--</div>
         </div>
 
       </div>

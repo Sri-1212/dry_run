@@ -62,14 +62,18 @@ document.addEventListener('DOMContentLoaded', async () => {
   const stepLastBtn = document.getElementById('step-last');
   const currentStepNumEl = document.getElementById('current-step-num');
   const totalStepsNumEl = document.getElementById('total-steps-num');
+  const progressBarFill = document.getElementById('progress-bar-fill');
   const stepSlider = document.getElementById('step-slider');
   const lineNumBadge = document.getElementById('line-num-badge');
   const stepExplanation = document.getElementById('step-explanation');
   const codeLinesBox = document.getElementById('code-lines-box');
   const activeLineIndicator = document.getElementById('active-line-indicator');
+  const changedVarsBadge = document.getElementById('changed-vars-badge');
   const variableTableBody = document.getElementById('variable-table-body');
   const callStackList = document.getElementById('call-stack-list');
   const outputText = document.getElementById('output-text');
+  const finalOutputCard = document.getElementById('final-output-card');
+  const finalOutputText = document.getElementById('final-output-text');
   const openDevtoolsLink = document.getElementById('open-devtools-link');
 
   // App State Variables
@@ -81,6 +85,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   let currentStepIndex = 0;
   let isPlaying = false;
   let playTimer = null;
+  let finalTraceOutput = '';
 
   // Load Saved Settings & Gemini API Key
   currentSettings = await StorageService.getSettings();
@@ -439,6 +444,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (document.activeElement.tagName === 'INPUT' || document.activeElement.tagName === 'TEXTAREA') return;
     if (e.key === 'ArrowLeft') jumpToStep(currentStepIndex - 1);
     if (e.key === 'ArrowRight') jumpToStep(currentStepIndex + 1);
+    if (e.key === 'Home') jumpToStep(0);
+    if (e.key === 'End') jumpToStep(traceSteps.length - 1);
     if (e.key === ' ') {
       e.preventDefault();
       toggleAutoPlay();
@@ -496,7 +503,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
       const traceData = response.trace;
       traceSteps = traceData.steps || [];
-      const finalOutput = traceData.output || "Execution completed";
+      finalTraceOutput = traceData.output || "Execution completed";
 
       if (traceSteps.length === 0) {
         showError("AI generated an empty execution trace.");
@@ -504,13 +511,15 @@ document.addEventListener('DOMContentLoaded', async () => {
       }
 
       // Attach overall output to last step
-      traceSteps[traceSteps.length - 1].output = finalOutput;
+      traceSteps[traceSteps.length - 1].output = finalTraceOutput;
 
     } else {
       // Built-in C++ Interpreter execution
       loadingMessage.textContent = `Simulating local C++ execution trace...`;
       try {
         traceSteps = CppDryRunner.simulateLocalCpp(extractedCppCode, input);
+        const last = traceSteps[traceSteps.length - 1];
+        finalTraceOutput = last?.output || "Execution completed";
       } catch (err) {
         showError(`Local Interpreter Error: ${err.message}`);
         return;
@@ -532,7 +541,14 @@ document.addEventListener('DOMContentLoaded', async () => {
     const step = traceSteps[idx];
 
     currentStepNumEl.textContent = `Step ${idx + 1}`;
+    totalStepsNumEl.textContent = `${traceSteps.length}`;
     stepSlider.value = idx + 1;
+
+    // Requirement #9: Progress bar showing current step / total steps
+    if (progressBarFill) {
+      const progressPct = ((idx + 1) / traceSteps.length) * 100;
+      progressBarFill.style.width = `${progressPct}%`;
+    }
 
     const lineNum = step.line || step.lineNumber || 1;
     lineNumBadge.textContent = `Line ${lineNum}`;
@@ -550,9 +566,19 @@ document.addEventListener('DOMContentLoaded', async () => {
       }
     });
 
-    renderVariables(step.variables || {});
+    const prevVars = idx > 0 ? (traceSteps[idx - 1].variables || {}) : {};
+    renderVariables(step.variables || {}, prevVars, idx);
     renderCallStack(step.callStack || ['Solution::solve()']);
     outputText.textContent = step.output || '--';
+
+    // Requirement #10: Final output after trace finishes / on final step
+    if (idx === traceSteps.length - 1) {
+      const displayFinal = step.output || finalTraceOutput || "Execution completed";
+      if (finalOutputText) finalOutputText.textContent = displayFinal;
+      if (finalOutputCard) finalOutputCard.classList.remove('hidden');
+    } else {
+      if (finalOutputCard) finalOutputCard.classList.add('hidden');
+    }
   }
 
   function renderCodeViewer(code) {
@@ -579,10 +605,17 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
 
   function highlightCodeLine(lineNum) {
-    activeLineIndicator.textContent = `Line ${lineNum}`;
     const rows = codeLinesBox.querySelectorAll('.code-line-row');
+    if (rows.length === 0) return;
+
+    let boundedLine = parseInt(lineNum) || 1;
+    if (boundedLine < 1) boundedLine = 1;
+    if (boundedLine > rows.length) boundedLine = rows.length;
+
+    activeLineIndicator.textContent = `Line ${boundedLine}`;
+
     rows.forEach(r => {
-      if (parseInt(r.dataset.line) === lineNum) {
+      if (parseInt(r.dataset.line) === boundedLine) {
         r.classList.add('active');
         r.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
       } else {
@@ -591,33 +624,123 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
   }
 
-  function renderVariables(variablesObj) {
+  // Requirement #5: Clearly indicate which variables changed from previous step
+  function renderVariables(variablesObj, prevVariablesObj = {}, stepIdx = 0) {
     variableTableBody.innerHTML = '';
     const keys = Object.keys(variablesObj);
+    let changedCount = 0;
 
     if (keys.length === 0) {
       variableTableBody.innerHTML = `<tr><td colspan="3" style="text-align:center; color:#6b7280; padding:8px;">No local variables initialized in scope</td></tr>`;
+      if (changedVarsBadge) changedVarsBadge.textContent = 'Step Scope';
       return;
     }
 
     keys.forEach(key => {
       const tr = document.createElement('tr');
       const val = variablesObj[key];
-      const valStr = typeof val === 'object' ? JSON.stringify(val) : String(val);
+      const prevVal = prevVariablesObj[key];
+
+      const isChanged = stepIdx > 0 && (
+        !(key in prevVariablesObj) ||
+        JSON.stringify(val) !== JSON.stringify(prevVal)
+      );
+
+      if (isChanged) {
+        changedCount++;
+        tr.className = 'var-row-changed';
+      }
+
       const typeStr = getTypeStr(val);
+      const valHtml = formatVariableValue(val);
+      const nameHtml = isChanged 
+        ? `${escapeHtml(key)} <span class="var-changed-badge" title="Variable modified in this step">⚡ UPDATED</span>`
+        : escapeHtml(key);
 
       tr.innerHTML = `
-        <td class="var-name">${key}</td>
-        <td style="color:#9ca3af;">${typeStr}</td>
-        <td class="var-val">${escapeHtml(valStr)}</td>
+        <td class="var-name">${nameHtml}</td>
+        <td style="color:#9ca3af; font-size:10px;">${escapeHtml(typeStr)}</td>
+        <td class="var-val">${valHtml}</td>
       `;
       variableTableBody.appendChild(tr);
     });
+
+    if (changedVarsBadge) {
+      if (stepIdx === 0) {
+        changedVarsBadge.textContent = 'Initial Scope';
+      } else if (changedCount > 0) {
+        changedVarsBadge.textContent = `⚡ ${changedCount} Changed`;
+      } else {
+        changedVarsBadge.textContent = 'No Changes';
+      }
+    }
+  }
+
+  // Format arrays, vectors, maps, stacks, strings, booleans, and numbers
+  function formatVariableValue(val) {
+    if (val === null || val === undefined) {
+      return '<span class="val-string">null</span>';
+    }
+
+    let parsed = val;
+    if (typeof val === 'string') {
+      const trimmed = val.trim();
+      if ((trimmed.startsWith('[') && trimmed.endsWith(']')) || (trimmed.startsWith('{') && trimmed.endsWith('}'))) {
+        try {
+          parsed = JSON.parse(trimmed);
+        } catch (e) {
+          parsed = val;
+        }
+      }
+    }
+
+    if (Array.isArray(parsed)) {
+      const itemsFormatted = parsed.map(item => {
+        if (typeof item === 'string') return `"${escapeHtml(item)}"`;
+        return escapeHtml(JSON.stringify(item));
+      }).join(', ');
+      return `<div class="val-struct-box">
+        <span class="val-array-text">[${itemsFormatted}]</span>
+        <span class="val-size-chip">size: ${parsed.length}</span>
+      </div>`;
+    }
+
+    if (typeof parsed === 'object' && parsed !== null) {
+      const keys = Object.keys(parsed);
+      const pairsFormatted = keys.map(k => `${escapeHtml(k)}: ${escapeHtml(JSON.stringify(parsed[k]))}`).join(', ');
+      return `<div class="val-struct-box">
+        <span class="val-array-text">{${pairsFormatted}}</span>
+        <span class="val-size-chip">size: ${keys.length}</span>
+      </div>`;
+    }
+
+    if (typeof val === 'string') {
+      return `<span class="val-string">"${escapeHtml(val)}"</span>`;
+    }
+
+    if (typeof val === 'boolean') {
+      return `<span class="val-bool">${val}</span>`;
+    }
+
+    if (typeof val === 'number') {
+      return `<span class="val-num">${val}</span>`;
+    }
+
+    return `<span>${escapeHtml(String(val))}</span>`;
   }
 
   function getTypeStr(val) {
-    if (Array.isArray(val)) return 'vector / array';
-    if (typeof val === 'object' && val !== null) return 'map / struct';
+    if (val === null || val === undefined) return 'auto';
+
+    let parsed = val;
+    if (typeof val === 'string') {
+      const trimmed = val.trim();
+      if (trimmed.startsWith('[') && trimmed.endsWith(']')) return 'vector';
+      if (trimmed.startsWith('{') && trimmed.endsWith('}')) return 'unordered_map';
+    }
+
+    if (Array.isArray(parsed)) return 'vector / array';
+    if (typeof parsed === 'object' && parsed !== null) return 'map / struct';
     if (typeof val === 'number') return Number.isInteger(val) ? 'int' : 'double';
     if (typeof val === 'boolean') return 'bool';
     if (typeof val === 'string') return 'string';

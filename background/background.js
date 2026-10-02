@@ -147,7 +147,8 @@ ${input ? input : "(No input provided - using small reasonable default test case
       step: s.step || (index + 1),
       line: s.line || s.lineNumber || 1,
       explanation: s.explanation || "Executing C++ line",
-      variables: s.variables || {}
+      variables: s.variables || {},
+      callStack: Array.isArray(s.callStack) ? s.callStack : ['Solution::solve()']
     }));
 
     return {
