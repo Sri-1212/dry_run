@@ -138,10 +138,11 @@ document.addEventListener('DOMContentLoaded', async () => {
       if (!results || !results[0] || !results[0].result) {
         const contentRes = await chrome.tabs.sendMessage(tab.id, { action: 'GET_LEETCODE_CODE' }).catch(() => null);
         if (contentRes && contentRes.code) {
-          processExtractedCode(contentRes.code, 'C++');
+          const guessedLang = normalizeLanguage('', contentRes.code);
+          processExtractedCode(contentRes.code, guessedLang);
           return;
         }
-        showError("Unable to access Monaco editor automatically. Please paste your C++ code manually below.");
+        showError("Unable to access Monaco editor automatically. Please paste your code manually below.");
         showManualFallback();
         return;
       }
@@ -157,7 +158,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       const rawLang = res.language;
 
       if (!rawCode || rawCode.trim().length === 0) {
-        showError("LeetCode editor is empty. Please enter or paste your C++ solution.");
+        showError("LeetCode editor is empty. Please write or paste your solution first.");
         showManualFallback();
         return;
       }
@@ -165,12 +166,6 @@ document.addEventListener('DOMContentLoaded', async () => {
       const langNorm = normalizeLanguage(rawLang, rawCode);
       detectedLanguage = langNorm;
       detectedLangChip.textContent = langNorm;
-
-      if (!isCppLanguage(langNorm)) {
-        showError("Support C++ only");
-        showManualFallback();
-        return;
-      }
 
       processExtractedCode(rawCode, langNorm);
 
@@ -272,28 +267,67 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
   }
 
+  /**
+   * Maps Monaco language IDs and LeetCode DOM text to canonical display names.
+   * Covers every language LeetCode exposes via Monaco.
+   */
   function normalizeLanguage(rawLang, code) {
     if (!rawLang) {
-      if (code.includes('#include') || code.includes('using namespace std') || code.includes('vector<') || code.includes('class Solution')) {
-        return 'C++';
-      }
-      if (code.includes('def ') || code.includes('import ')) return 'Python';
+      // Syntax-based inference when Monaco language ID is unavailable
+      if (code.includes('#include') || code.includes('using namespace std') || code.includes('vector<')) return 'C++';
+      if (code.includes('def ') && code.includes(':')) return 'Python';
       if (code.includes('public class ') || code.includes('System.out')) return 'Java';
-      if (code.includes('function ') || code.includes('const ') || code.includes('let ')) return 'JavaScript';
-      return 'C++';
+      if (code.includes('func ') && code.includes('package main')) return 'Go';
+      if (code.includes('fn ') && code.includes('let mut')) return 'Rust';
+      if (code.includes('function ') || code.includes('const ') || code.includes('=>')) return 'JavaScript';
+      if (code.includes('interface ') && code.includes(': number')) return 'TypeScript';
+      return 'Unknown';
     }
 
+    // Monaco language IDs returned by model.getLanguageId()
     const lower = rawLang.toLowerCase().trim();
-    if (lower.includes('cpp') || lower.includes('c++') || lower.includes('g++')) return 'C++';
-    if (lower.includes('python')) return 'Python';
-    if (lower.includes('java')) return 'Java';
-    if (lower.includes('javascript') || lower.includes('js')) return 'JavaScript';
-    return rawLang;
-  }
+    const monacoMap = {
+      'cpp':        'C++',
+      'c++':        'C++',
+      'c':          'C',
+      'python':     'Python',
+      'python3':    'Python',
+      'java':       'Java',
+      'javascript': 'JavaScript',
+      'typescript': 'TypeScript',
+      'golang':     'Go',
+      'go':         'Go',
+      'rust':       'Rust',
+      'csharp':     'C#',
+      'kotlin':     'Kotlin',
+      'swift':      'Swift',
+      'scala':      'Scala',
+      'ruby':       'Ruby',
+      'php':        'PHP',
+      'mysql':      'MySQL',
+      'mssql':      'MS SQL Server',
+      'oracle':     'Oracle SQL',
+      'bash':       'Bash',
+      'r':          'R',
+      'racket':     'Racket',
+      'erlang':     'Erlang',
+      'elixir':     'Elixir',
+      'dart':       'Dart',
+    };
 
-  function isCppLanguage(lang) {
-    const l = lang.toLowerCase();
-    return l.includes('c++') || l.includes('cpp') || l.includes('g++');
+    if (monacoMap[lower]) return monacoMap[lower];
+
+    // Partial match fallback (handles 'cpp20', 'python3.12', etc.)
+    if (lower.startsWith('cpp') || lower.includes('c++')) return 'C++';
+    if (lower.startsWith('python')) return 'Python';
+    if (lower.startsWith('java') && !lower.startsWith('javascript')) return 'Java';
+    if (lower.startsWith('javascript') || lower === 'js') return 'JavaScript';
+    if (lower.startsWith('typescript') || lower === 'ts') return 'TypeScript';
+    if (lower.startsWith('go')) return 'Go';
+    if (lower.startsWith('rust')) return 'Rust';
+
+    // Return raw string as-is if no mapping found (still traceable by Gemini)
+    return rawLang;
   }
 
   function processExtractedCode(code, lang) {
@@ -466,16 +500,10 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (!extractedCppCode || extractedCppCode.trim().length === 0) {
       await readMonacoEditorCode();
       if (!extractedCppCode || extractedCppCode.trim().length === 0) {
-        showError("No C++ solution code available to dry run.");
+        showError("No solution code found. Please open a LeetCode problem with code in the editor.");
         showManualFallback();
         return;
       }
-    }
-
-    if (!isCppLanguage(detectedLanguage)) {
-      showError("Support C++ only");
-      showManualFallback();
-      return;
     }
 
     switchState('loading');
@@ -484,13 +512,14 @@ document.addEventListener('DOMContentLoaded', async () => {
     const input = sampleInputArea.value;
 
     if (provider === 'gemini') {
-      loadingMessage.textContent = `Sending code & input to Gemini API for AI step-by-step trace...`;
-      
+      loadingMessage.textContent = `Sending ${detectedLanguage} code to Gemini for step-by-step trace...`;
+
       // Call Background Service Worker to execute Gemini AI tracing
       const response = await new Promise((resolve) => {
         chrome.runtime.sendMessage({
           action: 'GENERATE_AI_TRACE',
           code: extractedCppCode,
+          language: detectedLanguage,
           input: input,
           modelName: modelNameInput.value
         }, (res) => resolve(res || { success: false, error: "Service Worker did not respond." }));
@@ -810,7 +839,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   function applySettingsToUI(s, apiKey) {
     apiProviderSelect.value = s.apiProvider || 'gemini';
-    modelNameInput.value = s.modelName || 'gemini-1.5-flash';
+    modelNameInput.value = s.modelName || 'gemini-3.8-flash';
     stepSpeedInput.value = s.stepSpeedMs || 800;
     speedLabel.textContent = `${stepSpeedInput.value}ms`;
 

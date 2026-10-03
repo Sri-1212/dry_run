@@ -5,7 +5,7 @@
 
 export const DEFAULT_SETTINGS = {
   apiProvider: 'gemini', // 'gemini' | 'interpreter'
-  modelName: 'gemini-1.5-flash',
+  modelName: 'gemini-3.8-flash',
   theme: 'dark-dragon',
   stepSpeedMs: 800,
   autoTrace: true,

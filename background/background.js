@@ -28,7 +28,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   }
 
   if (message.action === 'GENERATE_AI_TRACE') {
-    handleGeminiAiTrace(message.code, message.input, message.modelName)
+    handleGeminiAiTrace(message.code, message.language || 'Unknown', message.input, message.modelName)
       .then(result => sendResponse(result))
       .catch(err => sendResponse({ success: false, error: err.message }));
     return true; // Keep message channel open for async response
@@ -37,11 +37,12 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
 /**
  * Handles Gemini AI Tracing Requests in Background Service Worker
- * @param {string} code - C++ source code from Monaco Editor
+ * @param {string} code - Source code from Monaco Editor (any language)
+ * @param {string} language - Detected language name (e.g. 'C++', 'Python', 'Java')
  * @param {string} input - Sample input test case
  * @param {string} modelNameOverride - Selected Gemini model name
  */
-async function handleGeminiAiTrace(code, input, modelNameOverride) {
+async function handleGeminiAiTrace(code, language, input, modelNameOverride) {
   try {
     // Read user's API key securely from chrome.storage.local
     const storageResult = await chrome.storage.local.get(['geminiApiKey']);
@@ -54,44 +55,54 @@ async function handleGeminiAiTrace(code, input, modelNameOverride) {
       };
     }
 
-    const modelName = modelNameOverride || 'gemini-1.5-flash';
+    const modelName = modelNameOverride || 'gemini-3.8-flash';
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`;
 
     const prompt = `
-You are an accurate C++ code execution tracer for LeetCode.
-Your objective is to TRACE the user's exact C++ code step-by-step with the provided input. Do NOT solve the problem, do NOT fix the code, do NOT provide hints, and do NOT give the intended LeetCode solution.
+You are an exact, step-by-step code execution tracer for LeetCode.
+The user's solution is written in ${language}.
+Your only job is to TRACE what the code actually does — step by step — with the provided input.
 
-Rules:
-1. Follow the user's exact C++ code line by line.
-2. Track 1-based line numbers.
-3. Track current variable values including primitives, arrays, vectors, strings, maps, sets, and stacks.
-4. Explain ONLY what the code is doing at that exact moment.
-5. Never fix the code or suggest a better approach.
-6. Never judge whether the algorithm is correct or optimal.
-7. If the code contains a bug, logical error, or undefined behavior, trace the exact behavior caused by that code.
-8. Limit the trace to a maximum of 40 meaningful steps. Merge repetitive loop iterations when necessary.
-9. If sample input is empty, use a small reasonable test input for this function and mention it in the first step's explanation.
-10. You must return ONLY valid JSON matching this exact structure:
+Strict rules:
+1. Follow the user's exact ${language} source code line by line. Do not alter, fix, or reorder it.
+2. Use 1-based line numbers matching the exact source code supplied.
+3. At every step, record the current values of ALL in-scope variables, including:
+   - Primitives (int, bool, char, float, double, etc.)
+   - Strings
+   - Arrays, lists, vectors, slices
+   - Maps, dicts, hashmaps, sets
+   - Stacks, queues, deques
+   - Objects/structs (show their fields)
+4. The "explanation" field must describe only what is happening at that exact line — nothing more.
+5. Never fix the code, never suggest improvements, never give hints, never provide the correct LeetCode solution.
+6. Never judge whether the algorithm is correct, optimal, or wrong.
+7. If the code has a bug or undefined behavior, trace the exact behavior the code would produce — including wrong outputs.
+8. Limit the trace to at most 40 meaningful steps. Merge consecutive identical loop iterations into a single summarized step when the variable change is repetitive.
+9. If no sample input is provided, invent a small, reasonable test input for the function and state it clearly in the first step's explanation.
+10. Return ONLY valid JSON with no markdown, no commentary, no code fences — just the raw JSON object:
 {
   "steps": [
     {
       "step": 1,
       "line": 5,
-      "explanation": "short explanation of line execution",
+      "explanation": "brief explanation of what this exact line does right now",
       "variables": {
         "i": 0,
         "sum": 0
       }
     }
   ],
-  "output": "final return value or output description"
+  "output": "the final return value or printed output of the code"
 }
 
-[C++ CODE TO TRACE]
+[LANGUAGE]
+${language}
+
+[SOURCE CODE TO TRACE]
 ${code}
 
 [SAMPLE INPUT]
-${input ? input : "(No input provided - using small reasonable default test case)"}
+${input ? input : '(none provided — use a small reasonable default and note it in step 1)'}
 `;
 
     const requestBody = {
@@ -146,7 +157,7 @@ ${input ? input : "(No input provided - using small reasonable default test case
     const normalizedSteps = parsed.steps.map((s, index) => ({
       step: s.step || (index + 1),
       line: s.line || s.lineNumber || 1,
-      explanation: s.explanation || "Executing C++ line",
+      explanation: s.explanation || `Executing line ${s.line || index + 1}`,
       variables: s.variables || {},
       callStack: Array.isArray(s.callStack) ? s.callStack : ['Solution::solve()']
     }));
