@@ -4,12 +4,9 @@
  */
 
 export const DEFAULT_SETTINGS = {
-  apiProvider: 'gemini', // 'gemini' | 'interpreter'
-  modelName: 'gemini-3.8-flash',
   theme: 'dark-dragon',
   stepSpeedMs: 800,
   autoTrace: true,
-  showMemoryGraph: true,
   maxSteps: 40
 };
 
@@ -40,35 +37,6 @@ export class StorageService {
       } else {
         const stored = localStorage.getItem('dryrun_settings');
         resolve(stored ? { ...DEFAULT_SETTINGS, ...JSON.parse(stored) } : DEFAULT_SETTINGS);
-      }
-    });
-  }
-
-  /**
-   * Save Gemini API key securely in chrome.storage.local
-   */
-  static async saveGeminiApiKey(key) {
-    return new Promise((resolve) => {
-      if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
-        chrome.storage.local.set({ geminiApiKey: key }, () => resolve());
-      } else {
-        localStorage.setItem('geminiApiKey', key);
-        resolve();
-      }
-    });
-  }
-
-  /**
-   * Retrieve Gemini API key from chrome.storage.local
-   */
-  static async getGeminiApiKey() {
-    return new Promise((resolve) => {
-      if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
-        chrome.storage.local.get(['geminiApiKey'], (result) => {
-          resolve(result.geminiApiKey || '');
-        });
-      } else {
-        resolve(localStorage.getItem('geminiApiKey') || '');
       }
     });
   }

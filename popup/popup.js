@@ -6,24 +6,12 @@
 
 import { StorageService } from '../utils/storage.js';
 import { LeetCodeHelper } from '../utils/leetcode_api.js';
-import { CppDryRunner } from '../utils/cpp_parser.js';
 
 document.addEventListener('DOMContentLoaded', async () => {
   // DOM Elements
   const problemTitleEl = document.getElementById('problem-title');
   const detectedLangChip = document.getElementById('detected-lang-chip');
   const fetchCodeBtn = document.getElementById('fetch-code-btn');
-  const toggleSettingsBtn = document.getElementById('toggle-settings-btn');
-  const settingsSection = document.getElementById('settings-section');
-  const apiProviderSelect = document.getElementById('api-provider');
-  const geminiKeyGroup = document.getElementById('gemini-key-group');
-  const geminiApiKeyInput = document.getElementById('gemini-api-key');
-  const keySavedStatus = document.getElementById('key-saved-status');
-  const toggleKeyVisibilityBtn = document.getElementById('toggle-key-visibility');
-  const modelNameGroup = document.getElementById('model-name-group');
-  const modelNameInput = document.getElementById('model-name');
-  const stepSpeedInput = document.getElementById('step-speed');
-  const speedLabel = document.getElementById('speed-label');
   const sampleInputArea = document.getElementById('sample-input');
   const startDryRunBtn = document.getElementById('start-dryrun-btn');
 
@@ -52,7 +40,6 @@ document.addEventListener('DOMContentLoaded', async () => {
   const loadingMessage = document.getElementById('loading-message');
   const errorMessageText = document.getElementById('error-message-text');
   const errorRetryBtn = document.getElementById('error-retry-btn');
-  const switchInterpreterBtn = document.getElementById('switch-interpreter-btn');
 
   // Step Result Controls & Views
   const stepFirstBtn = document.getElementById('step-first');
@@ -86,16 +73,11 @@ document.addEventListener('DOMContentLoaded', async () => {
   let isPlaying = false;
   let playTimer = null;
   let finalTraceOutput = '';
+  let stepSpeedMs = 800;
 
-  // Load Saved Settings & Gemini API Key
+  // Load Saved Settings
   currentSettings = await StorageService.getSettings();
-  const savedApiKey = await StorageService.getGeminiApiKey();
-  applySettingsToUI(currentSettings, savedApiKey);
-
-  // If Gemini API Key is not configured yet, auto-expand settings section for easy access
-  if (!savedApiKey || savedApiKey.trim().length === 0) {
-    settingsSection.classList.remove('hidden');
-  }
+  stepSpeedMs = currentSettings.stepSpeedMs || 800;
 
   // Initial Read from Active LeetCode Monaco Editor & Problem Examples
   await readMonacoEditorCode();
@@ -478,10 +460,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     startDryRun();
   });
 
-  toggleSettingsBtn.addEventListener('click', () => {
-    settingsSection.classList.toggle('hidden');
-  });
-
   const themeToggleBtn = document.getElementById('theme-toggle-btn');
   if (themeToggleBtn) {
     chrome.storage.local.get(['themePreference'], (res) => {
@@ -523,36 +501,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
   });
 
-  apiProviderSelect.addEventListener('change', () => {
-    const val = apiProviderSelect.value;
-    if (val === 'interpreter') {
-      geminiKeyGroup.classList.add('hidden');
-      modelNameGroup.classList.add('hidden');
-    } else {
-      geminiKeyGroup.classList.remove('hidden');
-      modelNameGroup.classList.remove('hidden');
-    }
-    saveCurrentSettings();
-  });
-
-  toggleKeyVisibilityBtn.addEventListener('click', () => {
-    geminiApiKeyInput.type = geminiApiKeyInput.type === 'password' ? 'text' : 'password';
-  });
-
-  // Save Gemini API Key securely in chrome.storage.local
-  geminiApiKeyInput.addEventListener('input', async () => {
-    const val = geminiApiKeyInput.value.trim();
-    await StorageService.saveGeminiApiKey(val);
-    updateKeyStatusBadge(val);
-  });
-
-  [modelNameInput, stepSpeedInput].forEach(el => {
-    el.addEventListener('input', () => {
-      speedLabel.textContent = `${stepSpeedInput.value}ms`;
-      saveCurrentSettings();
-    });
-  });
-
   clearInputBtn.addEventListener('click', () => {
     sampleInputArea.value = '';
     StorageService.saveSampleInput(currentProblemSlug, '');
@@ -564,13 +512,6 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   errorRetryBtn.addEventListener('click', () => {
     readMonacoEditorCode();
-  });
-
-  switchInterpreterBtn.addEventListener('click', () => {
-    apiProviderSelect.value = 'interpreter';
-    saveCurrentSettings();
-    applySettingsToUI(currentSettings, geminiApiKeyInput.value);
-    startDryRun();
   });
 
   // START DRY RUN BUTTON
@@ -627,52 +568,35 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     switchState('loading');
 
-    const provider = apiProviderSelect.value;
     const input = sampleInputArea.value;
+    loadingMessage.textContent = `Sending ${detectedLanguage} code to Gemini for step-by-step trace...`;
 
-    if (provider === 'gemini') {
-      loadingMessage.textContent = `Sending ${detectedLanguage} code to Gemini for step-by-step trace...`;
+    // Call Background Service Worker to execute Gemini AI tracing
+    const response = await new Promise((resolve) => {
+      chrome.runtime.sendMessage({
+        action: 'GENERATE_AI_TRACE',
+        code: extractedCppCode,
+        language: detectedLanguage,
+        input: input
+      }, (res) => resolve(res || { success: false, error: "Service Worker did not respond." }));
+    });
 
-      // Call Background Service Worker to execute Gemini AI tracing
-      const response = await new Promise((resolve) => {
-        chrome.runtime.sendMessage({
-          action: 'GENERATE_AI_TRACE',
-          code: extractedCppCode,
-          language: detectedLanguage,
-          input: input,
-          modelName: modelNameInput.value
-        }, (res) => resolve(res || { success: false, error: "Service Worker did not respond." }));
-      });
-
-      if (!response.success) {
-        showError(response.error || "Failed to generate AI execution trace.");
-        return;
-      }
-
-      const traceData = response.trace;
-      traceSteps = traceData.steps || [];
-      finalTraceOutput = traceData.output || "Execution completed";
-
-      if (traceSteps.length === 0) {
-        showError("AI generated an empty execution trace.");
-        return;
-      }
-
-      // Attach overall output to last step
-      traceSteps[traceSteps.length - 1].output = finalTraceOutput;
-
-    } else {
-      // Built-in C++ Interpreter execution
-      loadingMessage.textContent = `Simulating local C++ execution trace...`;
-      try {
-        traceSteps = CppDryRunner.simulateLocalCpp(extractedCppCode, input);
-        const last = traceSteps[traceSteps.length - 1];
-        finalTraceOutput = last?.output || "Execution completed";
-      } catch (err) {
-        showError(`Local Interpreter Error: ${err.message}`);
-        return;
-      }
+    if (!response.success) {
+      showError(response.error || "Failed to generate AI execution trace.");
+      return;
     }
+
+    const traceData = response.trace;
+    traceSteps = traceData.steps || [];
+    finalTraceOutput = traceData.output || "Execution completed";
+
+    if (traceSteps.length === 0) {
+      showError("AI generated an empty execution trace.");
+      return;
+    }
+
+    // Attach overall output to last step
+    traceSteps[traceSteps.length - 1].output = finalTraceOutput;
 
     currentStepIndex = 0;
     stepSlider.max = traceSteps.length;
@@ -924,7 +848,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     stepPlayBtn.textContent = '⏸';
     stepPlayBtn.title = 'Pause Auto Step';
 
-    const speed = parseInt(stepSpeedInput.value) || 800;
+    const speed = stepSpeedMs || 800;
     playTimer = setInterval(() => {
       if (currentStepIndex < traceSteps.length - 1) {
         jumpToStep(currentStepIndex + 1);
@@ -954,41 +878,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (stateName === 'loading') stateLoading.classList.add('active');
     if (stateName === 'error') stateError.classList.add('active');
     if (stateName === 'result') stateResult.classList.add('active');
-  }
-
-  function applySettingsToUI(s, apiKey) {
-    apiProviderSelect.value = s.apiProvider || 'gemini';
-    modelNameInput.value = s.modelName || 'gemini-3.8-flash';
-    stepSpeedInput.value = s.stepSpeedMs || 800;
-    speedLabel.textContent = `${stepSpeedInput.value}ms`;
-
-    if (apiKey) {
-      geminiApiKeyInput.value = apiKey;
-      updateKeyStatusBadge(apiKey);
-    } else {
-      geminiApiKeyInput.value = '';
-      updateKeyStatusBadge('');
-    }
-
-    if (s.apiProvider === 'interpreter') {
-      geminiKeyGroup.classList.add('hidden');
-      modelNameGroup.classList.add('hidden');
-    } else {
-      geminiKeyGroup.classList.remove('hidden');
-      modelNameGroup.classList.remove('hidden');
-    }
-  }
-
-  function updateKeyStatusBadge(key) {
-    const trimmed = (key || '').trim();
-    if (trimmed.length > 0) {
-      const masked = trimmed.length > 4 ? trimmed.slice(-4) : trimmed;
-      keySavedStatus.textContent = `✅ Key Set (••••${masked})`;
-      keySavedStatus.className = 'key-status-badge configured';
-    } else {
-      keySavedStatus.textContent = '⚠️ Not Set';
-      keySavedStatus.className = 'key-status-badge unconfigured';
-    }
   }
 
   async function handleExtractedExamples(examples) {
@@ -1048,15 +937,6 @@ document.addEventListener('DOMContentLoaded', async () => {
       sampleInputArea.value = examples[selectedIdx].input;
       StorageService.saveSampleInput(currentProblemSlug, examples[selectedIdx].input);
     }
-  }
-
-  function saveCurrentSettings() {
-    currentSettings = {
-      apiProvider: apiProviderSelect.value,
-      modelName: modelNameInput.value.trim(),
-      stepSpeedMs: parseInt(stepSpeedInput.value)
-    };
-    StorageService.saveSettings(currentSettings);
   }
 
   function escapeHtml(str) {

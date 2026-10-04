@@ -1,0 +1,4 @@
+# Config with sensitive API key
+config.js
+.DS_Store
+node_modules/

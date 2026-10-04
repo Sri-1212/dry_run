@@ -22,10 +22,6 @@
           <span class="rail-icon">▶</span>
           <span class="rail-tooltip">Dry Run</span>
         </button>
-        <button id="toggle-settings-btn" class="rail-btn" title="⚙️ Settings">
-          <span class="rail-icon">⚙️</span>
-          <span class="rail-tooltip">Settings</span>
-        </button>
         <button id="theme-toggle-btn" class="rail-btn" title="Toggle Dark/Light Mode">
           <span class="rail-icon">🌙</span>
           <span class="rail-tooltip">Theme</span>
@@ -112,47 +108,6 @@
         </button>
       </section>
 
-      <!-- ⚙️ SETTINGS BAR / API SECTION (Collapsible Card) -->
-      <section id="settings-section" class="settings-card collapsible hidden">
-        <div class="settings-header">
-          <h3>⚙️ Execution & API Settings</h3>
-        </div>
-        <div class="settings-grid">
-          <div class="form-group">
-            <label for="api-provider">Execution Engine:</label>
-            <select id="api-provider" class="custom-select">
-              <option value="gemini">Gemini API (AI Execution Tracer)</option>
-              <option value="interpreter">Built-in C++ Interpreter (Client-side)</option>
-            </select>
-          </div>
-
-          <div id="gemini-key-group" class="form-group">
-            <div class="label-with-status">
-              <label for="gemini-api-key">Gemini API Key:</label>
-              <span id="key-saved-status" class="key-status-badge unconfigured">⚠️ Not Set</span>
-            </div>
-            <div class="input-with-btn">
-              <input type="password" id="gemini-api-key" placeholder="Enter Gemini API Key (AIzaSy...)" autocomplete="off">
-              <button id="toggle-key-visibility" class="btn-mini" type="button">👁️</button>
-            </div>
-          </div>
-
-          <div id="model-name-group" class="form-group">
-            <label for="model-name">Gemini Model:</label>
-            <select id="model-name" class="custom-select">
-              <option value="gemini-3.8-flash">gemini-3.8-flash (Recommended · Stable)</option>
-              <option value="gemini-3.7-flash">gemini-3.7-flash (Previous Gen · Stable)</option>
-              <option value="gemini-3.5-flash">gemini-3.5-flash (Legacy · Stable)</option>
-            </select>
-          </div>
-
-          <div class="form-group">
-            <label for="step-speed">Auto Speed: <span id="speed-label">800ms</span></label>
-            <input type="range" id="step-speed" min="200" max="2000" step="100" value="800">
-          </div>
-        </div>
-      </section>
-
       <!-- 📊 STAT CARDS ROW (Bento Header Row) -->
       <section class="stat-cards-grid">
         <!-- 1. Current Step Card (Near-Black Emphasis Card) -->
@@ -233,7 +188,6 @@
             <p id="error-message-text" class="error-text">Failed to execute dry run.</p>
             <div class="error-actions-group">
               <button id="error-retry-btn" class="btn-pill-secondary">🔄 Try Again</button>
-              <button id="switch-interpreter-btn" class="btn-pill-primary">⚡ Use Built-in Interpreter</button>
             </div>
           </div>
         </div>

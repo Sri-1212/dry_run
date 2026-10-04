@@ -3,16 +3,16 @@
  * Manages extension state, tab tracking, and Gemini AI execution tracing.
  */
 
+try {
+  importScripts('/config.js');
+} catch (e) {
+  console.error('[DryRun SW] Failed to load /config.js via importScripts:', e);
+}
+
 // Listener for extension installation
 chrome.runtime.onInstalled.addListener((details) => {
   if (details.reason === 'install') {
     console.log('[DryRun Service Worker] Extension installed successfully.');
-    chrome.storage.sync.set({
-      theme: 'dark-dragon',
-      apiProvider: 'gemini',
-      stepSpeedMs: 800,
-      autoTrace: true
-    });
   }
 });
 
@@ -28,7 +28,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   }
 
   if (message.action === 'GENERATE_AI_TRACE') {
-    handleGeminiAiTrace(message.code, message.language || 'Unknown', message.input, message.modelName)
+    handleGeminiAiTrace(message.code, message.language || 'Unknown', message.input)
       .then(result => sendResponse(result))
       .catch(err => sendResponse({ success: false, error: err.message }));
     return true; // Keep message channel open for async response
@@ -40,22 +40,19 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
  * @param {string} code - Source code from Monaco Editor (any language)
  * @param {string} language - Detected language name (e.g. 'C++', 'Python', 'Java')
  * @param {string} input - Sample input test case
- * @param {string} modelNameOverride - Selected Gemini model name
  */
-async function handleGeminiAiTrace(code, language, input, modelNameOverride) {
+async function handleGeminiAiTrace(code, language, input) {
   try {
-    // Read user's API key securely from chrome.storage.local
-    const storageResult = await chrome.storage.local.get(['geminiApiKey']);
-    const apiKey = storageResult.geminiApiKey ? storageResult.geminiApiKey.trim() : '';
+    const apiKey = (typeof CONFIG !== 'undefined' && CONFIG.GEMINI_API_KEY) ? CONFIG.GEMINI_API_KEY.trim() : '';
+    const modelName = (typeof CONFIG !== 'undefined' && CONFIG.GEMINI_MODEL) ? CONFIG.GEMINI_MODEL.trim() : 'gemini-2.5-flash';
 
-    if (!apiKey) {
+    if (!apiKey || apiKey === "YOUR_GEMINI_API_KEY") {
       return {
         success: false,
-        error: "Missing Gemini API Key. Please enter and save your Gemini API key in Settings (⚙️)."
+        error: "Missing Gemini API Key. Please configure your GEMINI_API_KEY in config.js."
       };
     }
 
-    const modelName = modelNameOverride || 'gemini-3.8-flash';
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`;
 
     const prompt = `
