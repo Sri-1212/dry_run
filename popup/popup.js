@@ -482,6 +482,47 @@ document.addEventListener('DOMContentLoaded', async () => {
     settingsSection.classList.toggle('hidden');
   });
 
+  const themeToggleBtn = document.getElementById('theme-toggle-btn');
+  if (themeToggleBtn) {
+    chrome.storage.local.get(['themePreference'], (res) => {
+      if (res && res.themePreference === 'dark') {
+        document.body.classList.add('dark-mode');
+      }
+    });
+
+    themeToggleBtn.addEventListener('click', () => {
+      document.body.classList.toggle('dark-mode');
+      const isDark = document.body.classList.contains('dark-mode');
+      chrome.storage.local.set({ themePreference: isDark ? 'dark' : 'light' });
+    });
+  }
+
+  const tabTraceBtn = document.getElementById('tab-trace-btn');
+  const tabVarsBtn = document.getElementById('tab-vars-btn');
+  const tabOutputBtn = document.getElementById('tab-output-btn');
+  const segmentedTabs = [tabTraceBtn, tabVarsBtn, tabOutputBtn];
+
+  segmentedTabs.forEach(tabBtn => {
+    if (!tabBtn) return;
+    tabBtn.addEventListener('click', () => {
+      segmentedTabs.forEach(b => b && b.classList.remove('active'));
+      tabBtn.classList.add('active');
+
+      const targetTab = tabBtn.dataset.tab;
+      const codeBento = document.querySelector('.code-bento-card');
+      const varsBento = document.querySelector('.variables-bento-card');
+      const stackOutputSec = document.getElementById('stack-output-section');
+
+      if (targetTab === 'trace') {
+        if (codeBento) codeBento.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      } else if (targetTab === 'vars') {
+        if (varsBento) varsBento.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      } else if (targetTab === 'output') {
+        if (stackOutputSec) stackOutputSec.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      }
+    });
+  });
+
   apiProviderSelect.addEventListener('change', () => {
     const val = apiProviderSelect.value;
     if (val === 'interpreter') {

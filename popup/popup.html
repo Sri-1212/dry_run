@@ -4,285 +4,347 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Dry Run - LeetCode C++ Visualizer 🐉</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="popup.css">
 </head>
-<body class="dark-dragon">
+<body>
   <div class="popup-container">
     
-    <!-- 🐉 DRAGON TITLE HEADER -->
-    <header class="dragon-header">
-      <div class="brand-group">
-        <div class="dragon-logo-wrapper">
-          <img src="../icons/dragon_logo.svg" alt="Dragon Logo" class="dragon-svg-logo">
+    <!-- 1. SLIM LEFT ICON RAIL -->
+    <aside class="icon-rail">
+      <div class="rail-top">
+        <div class="rail-brand" title="Dry Run C++">
+          <span class="rail-brand-icon">🐉</span>
         </div>
-        <div class="brand-text">
-          <h1 class="dragon-title">DRY RUN <span class="dragon-badge">C++</span></h1>
-          <p class="dragon-subtitle">Step-by-Step LeetCode Debugger</p>
-        </div>
-      </div>
-      <div class="header-actions">
-        <span class="status-indicator" id="connection-status" title="Connected to LeetCode Monaco Editor">
-          <span class="status-dot"></span> Online
-        </span>
-        <button id="toggle-settings-btn" class="icon-btn btn-settings-toggle" title="API & Execution Settings">
-          ⚙️ Settings
+        <button id="rail-dryrun-btn" class="rail-btn active" title="Dry Run Visualizer">
+          <span class="rail-icon">▶</span>
+          <span class="rail-tooltip">Dry Run</span>
+        </button>
+        <button id="toggle-settings-btn" class="rail-btn" title="⚙️ Settings">
+          <span class="rail-icon">⚙️</span>
+          <span class="rail-tooltip">Settings</span>
+        </button>
+        <button id="theme-toggle-btn" class="rail-btn" title="Toggle Dark/Light Mode">
+          <span class="rail-icon">🌙</span>
+          <span class="rail-tooltip">Theme</span>
         </button>
       </div>
-    </header>
-
-    <!-- 📊 PROBLEMS BAR -->
-    <section class="problems-bar">
-      <div class="problem-info">
-        <span class="problem-tag">LeetCode Problem</span>
-        <h2 id="problem-title" class="problem-name">Detecting LeetCode Problem...</h2>
-      </div>
-      <div class="problem-actions">
-        <span id="detected-lang-chip" class="lang-chip">C++</span>
-        <button id="fetch-code-btn" class="btn-secondary" title="Re-fetch solution from LeetCode Monaco Editor">
-          🔄 Read Editor
+      <div class="rail-bottom">
+        <button id="open-devtools-link" class="rail-btn" title="DevTools Panel 🛠️">
+          <span class="rail-icon">🛠️</span>
+          <span class="rail-tooltip">DevTools</span>
         </button>
       </div>
-    </section>
+    </aside>
 
-    <!-- 🔍 VERIFICATION PREVIEW BANNER -->
-    <section id="verification-banner" class="verification-banner hidden">
-      <div class="verification-header">
-        <div class="verification-title">
-          <span>🔍 Live Editor Code Verification</span>
-        </div>
-        <button id="verify-play-btn" class="btn-verify-play">▶ Play</button>
-      </div>
-      <div class="verification-stats">
-        <div class="stat-item">
-          <span class="stat-label">Detect Language:</span>
-          <span id="verify-lang-badge" class="stat-value highlight-lang">C++</span>
-        </div>
-        <div class="stat-item">
-          <span class="stat-label">Code Length:</span>
-          <span id="verify-length-badge" class="stat-value">0 chars (0 lines)</span>
-        </div>
-      </div>
-      <div class="verification-preview-box">
-        <span class="preview-label">First Few Lines Preview:</span>
-        <pre id="verify-code-snippet" class="code-snippet-pre">// Code preview will appear here...</pre>
-      </div>
-    </section>
+    <!-- 2. MAIN WORKSPACE CONTAINER -->
+    <main class="main-workspace">
 
-    <!-- 📝 MANUAL CODE FALLBACK SECTION -->
-    <section id="manual-fallback-section" class="manual-fallback-bar hidden">
-      <div class="fallback-header">
-        <span class="fallback-icon">📋</span>
-        <label for="manual-code-input" class="fallback-label">Manual C++ Code Input (Monaco Fallback):</label>
-      </div>
-      <p class="fallback-subtext">Could not read Monaco editor automatically. Paste your C++ code below:</p>
-      <textarea id="manual-code-input" placeholder="#include <vector>&#10;using namespace std;&#10;class Solution { ... };" rows="4"></textarea>
-      <button id="use-manual-code-btn" class="btn-primary-glow">
-        ✅ Load Manual Code
-      </button>
-    </section>
-
-    <!-- ⚙️ SETTINGS BAR / API SECTION (Collapsible) -->
-    <section id="settings-section" class="settings-bar collapsible hidden">
-      <div class="settings-header">
-        <h3>⚙️ Execution & API Settings</h3>
-      </div>
-      <div class="settings-body">
-        
-        <div class="form-group">
-          <label for="api-provider">Execution Engine:</label>
-          <select id="api-provider" class="custom-select">
-            <option value="gemini">Gemini API (AI Execution Tracer)</option>
-            <option value="interpreter">Built-in C++ Interpreter (Client-side)</option>
-          </select>
-        </div>
-
-        <div id="gemini-key-group" class="form-group">
-          <div class="label-with-status">
-            <label for="gemini-api-key">Gemini API Key:</label>
-            <span id="key-saved-status" class="key-status-badge unconfigured">⚠️ Not Set</span>
+      <!-- TOP SEARCH-STYLE BAR -->
+      <header class="top-bar">
+        <div class="top-left-group">
+          <div class="problem-meta-pill">
+            <span class="meta-tag">LeetCode</span>
+            <h2 id="problem-title" class="problem-name-text">Detecting Problem...</h2>
           </div>
-          <div class="input-with-btn">
-            <input type="password" id="gemini-api-key" placeholder="Enter Gemini API Key (AIzaSy...)" autocomplete="off">
-            <button id="toggle-key-visibility" class="btn-mini" type="button">👁️</button>
+          <span id="connection-status" class="status-indicator-pill" title="Editor Status">
+            <span class="status-dot"></span> Online
+          </span>
+        </div>
+
+        <div class="top-center-search">
+          <div class="search-input-wrapper">
+            <span class="search-icon">📥</span>
+            <textarea id="sample-input" class="search-input-box" placeholder="nums = [2,7,11,15], target = 9" rows="1"></textarea>
           </div>
-          <small class="help-text">Saved securely in <code>chrome.storage.local</code>. Never hardcoded or committed.</small>
-        </div>
-
-        <div id="model-name-group" class="form-group">
-          <label for="model-name">Gemini Model:</label>
-          <select id="model-name" class="custom-select">
-            <option value="gemini-3.8-flash">gemini-3.8-flash (Recommended · Stable)</option>
-            <option value="gemini-3.7-flash">gemini-3.7-flash (Previous Gen · Stable)</option>
-            <option value="gemini-3.5-flash">gemini-3.5-flash (Legacy · Stable)</option>
-          </select>
-        </div>
-
-        <div class="form-group">
-          <label for="step-speed">Auto Step Speed (ms): <span id="speed-label">800ms</span></label>
-          <input type="range" id="step-speed" min="200" max="2000" step="100" value="800">
-        </div>
-
-      </div>
-    </section>
-
-    <!-- 📝 SAMPLE INPUT TEXT AREA -->
-    <section class="sample-input-section">
-      <div class="section-label-bar">
-        <label for="sample-input">Sample Input Test Case:</label>
-        <div class="sample-input-actions">
           <div id="example-selector-container" class="example-selector-container">
-            <!-- Dynamic LeetCode Example buttons (Example 1, Example 2) inserted here -->
+            <!-- Dynamic Example buttons inserted here -->
           </div>
-          <button id="clear-input-btn" class="btn-mini text-danger" title="Clear input textarea">Clear</button>
+          <button id="clear-input-btn" class="clear-pill-btn" title="Clear input">Clear</button>
         </div>
-      </div>
+
+        <div class="top-right-actions">
+          <button id="fetch-code-btn" class="btn-pill-secondary" title="Re-fetch solution from LeetCode Monaco Editor">
+            🔄 Read Editor
+          </button>
+          <button id="start-dryrun-btn" class="btn-circle-run" title="Start Step-by-Step Dry Run">
+            ▶
+          </button>
+        </div>
+      </header>
+
       <div id="example-status-subtext" class="example-status-subtext hidden"></div>
-      <textarea id="sample-input" placeholder="nums = [2, 7, 11, 15]&#10;target = 9" rows="2"></textarea>
-    </section>
 
-    <!-- 🐉 DRAGON EXECUTION BUTTON -->
-    <section class="action-section">
-      <button id="start-dryrun-btn" class="dragon-button">
-        <span class="btn-icon">🐉</span>
-        <span class="btn-text">START STEP-BY-STEP DRY RUN</span>
-        <span class="btn-glow"></span>
-      </button>
-    </section>
-
-    <!-- 📺 RESULT AREA (Loading / Error / Result States) -->
-    <section id="result-area" class="result-area">
-      
-      <!-- 1. IDLE STATE -->
-      <div id="state-idle" class="state-container active">
-        <div class="idle-placeholder">
-          <div class="dragon-placeholder-icon">🐉</div>
-          <p>Ready to dry run! Click <strong>START STEP-BY-STEP DRY RUN</strong> above to trace your C++ LeetCode solution.</p>
-        </div>
-      </div>
-
-      <!-- 2. LOADING STATE -->
-      <div id="state-loading" class="state-container hidden">
-        <div class="loading-card">
-          <div class="dragon-spinner">
-            <span class="spinner-ring"></span>
-            <span class="spinner-icon">🐉</span>
+      <!-- 🔍 VERIFICATION PREVIEW BANNER (Collapsible) -->
+      <section id="verification-banner" class="verification-banner hidden">
+        <div class="verification-header">
+          <div class="verification-title">
+            <span>🔍 Live Editor Code Verification</span>
           </div>
-          <h3>Tracing C++ Execution...</h3>
-          <p id="loading-message">Sending code & input to Gemini API for step-by-step tracing...</p>
+          <button id="verify-play-btn" class="btn-verify-play">▶ Play</button>
         </div>
-      </div>
-
-      <!-- 3. ERROR RESULT STATE -->
-      <div id="state-error" class="state-container hidden">
-        <div class="error-card">
-          <div class="error-header">
-            <span class="error-icon">⚠️</span>
-            <h3>Dry Run Execution Error</h3>
+        <div class="verification-stats">
+          <div class="stat-item">
+            <span class="stat-label">Language:</span>
+            <span id="verify-lang-badge" class="stat-value highlight-lang">C++</span>
           </div>
-          <p id="error-message-text" class="error-text">Failed to execute dry run.</p>
-          <div class="error-actions">
-            <button id="error-retry-btn" class="btn-secondary">🔄 Try Again</button>
-            <button id="switch-interpreter-btn" class="btn-primary">⚡ Use Built-in Interpreter</button>
+          <div class="stat-item">
+            <span class="stat-label">Code Length:</span>
+            <span id="verify-length-badge" class="stat-value">0 chars (0 lines)</span>
           </div>
         </div>
-      </div>
-
-      <!-- 4. STEP-BY-STEP RESULT STATE -->
-      <div id="state-result" class="state-container hidden">
-        
-        <!-- STEP CONTROLS BAR -->
-        <div class="step-controls-bar">
-          <div class="control-buttons">
-            <button id="step-first" class="ctrl-btn" title="First Step (Home)">⏮</button>
-            <button id="step-prev" class="ctrl-btn" title="Previous Step (Left Arrow)">◀</button>
-            <button id="step-play" class="ctrl-btn play-btn" title="Play / Pause Auto Step (Space)">▶</button>
-            <button id="step-next" class="ctrl-btn" title="Next Step (Right Arrow)">▶</button>
-            <button id="step-last" class="ctrl-btn" title="Last Step (End)">⏭</button>
-          </div>
-          <div class="step-counter">
-            <span id="current-step-num">Step 1</span> / <span id="total-steps-num">10</span>
-          </div>
+        <div class="verification-preview-box">
+          <pre id="verify-code-snippet" class="code-snippet-pre">// Code preview will appear here...</pre>
         </div>
+      </section>
 
-        <!-- PROGRESS BAR -->
-        <div class="progress-bar-wrapper">
-          <div class="progress-bar-track">
-            <div id="progress-bar-fill" class="progress-bar-fill" style="width: 10%;"></div>
+      <!-- 📝 MANUAL CODE FALLBACK SECTION -->
+      <section id="manual-fallback-section" class="manual-fallback-bar hidden">
+        <div class="fallback-header">
+          <span class="fallback-icon">📋</span>
+          <label for="manual-code-input" class="fallback-label">Manual C++ Code Input (Monaco Fallback):</label>
+        </div>
+        <textarea id="manual-code-input" placeholder="#include <vector>&#10;using namespace std;&#10;class Solution { ... };" rows="3"></textarea>
+        <button id="use-manual-code-btn" class="btn-primary-glow">
+          ✅ Load Manual Code
+        </button>
+      </section>
+
+      <!-- ⚙️ SETTINGS BAR / API SECTION (Collapsible Card) -->
+      <section id="settings-section" class="settings-card collapsible hidden">
+        <div class="settings-header">
+          <h3>⚙️ Execution & API Settings</h3>
+        </div>
+        <div class="settings-grid">
+          <div class="form-group">
+            <label for="api-provider">Execution Engine:</label>
+            <select id="api-provider" class="custom-select">
+              <option value="gemini">Gemini API (AI Execution Tracer)</option>
+              <option value="interpreter">Built-in C++ Interpreter (Client-side)</option>
+            </select>
           </div>
-        </div>
 
-        <div class="step-slider-container">
-          <input type="range" id="step-slider" min="1" max="10" value="1">
-        </div>
-
-        <!-- EXPLANATION BANNER -->
-        <div class="explanation-banner">
-          <span class="line-badge" id="line-num-badge">Line 1</span>
-          <p id="step-explanation" class="explanation-text">Initial state before function execution.</p>
-        </div>
-
-        <!-- C++ CODE VIEWER WITH HIGHLIGHTED ACTIVE LINE -->
-        <div class="code-viewer-container">
-          <div class="code-header">
-            <span>💻 C++ Source Code Execution</span>
-            <span id="active-line-indicator" class="active-line-indicator">Line 1</span>
-          </div>
-          <div id="code-lines-box" class="code-lines-box">
-            <!-- Line elements dynamically inserted here -->
-          </div>
-        </div>
-
-        <!-- VARIABLE MEMORY STATE TABLE -->
-        <div class="memory-state-container">
-          <div class="memory-header">
-            <span>📊 Variable Memory State</span>
-            <span id="changed-vars-badge" class="memory-badge">Step Scope</span>
-          </div>
-          <table class="variable-table">
-            <thead>
-              <tr>
-                <th>Variable</th>
-                <th>Type / Structure</th>
-                <th>Current Value</th>
-              </tr>
-            </thead>
-            <tbody id="variable-table-body">
-              <!-- Variables inserted here -->
-            </tbody>
-          </table>
-        </div>
-
-        <!-- CALL STACK & CONSOLE OUTPUT -->
-        <div class="stack-output-row">
-          <div class="stack-card">
-            <span class="card-label">Call Stack:</span>
-            <div id="call-stack-list" class="call-stack-list">
-              <span class="stack-tag">Solution::solve()</span>
+          <div id="gemini-key-group" class="form-group">
+            <div class="label-with-status">
+              <label for="gemini-api-key">Gemini API Key:</label>
+              <span id="key-saved-status" class="key-status-badge unconfigured">⚠️ Not Set</span>
+            </div>
+            <div class="input-with-btn">
+              <input type="password" id="gemini-api-key" placeholder="Enter Gemini API Key (AIzaSy...)" autocomplete="off">
+              <button id="toggle-key-visibility" class="btn-mini" type="button">👁️</button>
             </div>
           </div>
-          <div class="output-card">
-            <span class="card-label">Step Output:</span>
-            <div id="output-text" class="output-text">--</div>
+
+          <div id="model-name-group" class="form-group">
+            <label for="model-name">Gemini Model:</label>
+            <select id="model-name" class="custom-select">
+              <option value="gemini-3.8-flash">gemini-3.8-flash (Recommended · Stable)</option>
+              <option value="gemini-3.7-flash">gemini-3.7-flash (Previous Gen · Stable)</option>
+              <option value="gemini-3.5-flash">gemini-3.5-flash (Legacy · Stable)</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label for="step-speed">Auto Speed: <span id="speed-label">800ms</span></label>
+            <input type="range" id="step-speed" min="200" max="2000" step="100" value="800">
+          </div>
+        </div>
+      </section>
+
+      <!-- 📊 STAT CARDS ROW (Bento Header Row) -->
+      <section class="stat-cards-grid">
+        <!-- 1. Current Step Card (Near-Black Emphasis Card) -->
+        <div class="stat-card black-card">
+          <span class="stat-label">CURRENT STEP</span>
+          <div class="stat-value-group">
+            <span id="current-step-num" class="stat-number">Step 0</span>
           </div>
         </div>
 
-        <!-- 🏁 FINAL OUTPUT CARD (Visible on final step or completion) -->
-        <div id="final-output-card" class="final-output-card hidden">
-          <div class="final-output-header">
-            <span class="final-output-badge">🏁 FINAL EXECUTION OUTPUT</span>
+        <!-- 2. Total Steps Card -->
+        <div class="stat-card">
+          <span class="stat-label">TOTAL STEPS</span>
+          <div class="stat-value-group">
+            <span id="total-steps-num" class="stat-number">0</span>
+            <span class="stat-unit">steps</span>
           </div>
-          <div id="final-output-text" class="final-output-text">--</div>
         </div>
 
-      </div>
+        <!-- 3. Language Card -->
+        <div class="stat-card">
+          <span class="stat-label">LANGUAGE</span>
+          <div class="stat-value-group">
+            <span id="detected-lang-chip" class="lang-pill">C++</span>
+          </div>
+        </div>
 
-    </section>
+        <!-- 4. Variables Changed Card -->
+        <div class="stat-card">
+          <span class="stat-label">VARIABLE SCOPE</span>
+          <div class="stat-value-group">
+            <span id="changed-vars-badge" class="scope-pill">Initial Scope</span>
+          </div>
+        </div>
+      </section>
 
-    <!-- FOOTER -->
-    <footer class="dragon-footer">
-      <span>Dry Run v1.0.0 • Manifest V3</span>
-      <span class="footer-link" id="open-devtools-link">DevTools Panel 🛠️</span>
-    </footer>
+      <!-- 📺 RESULT STATES AREA -->
+      <section id="result-area" class="result-workspace">
+
+        <!-- 1. IDLE STATE -->
+        <div id="state-idle" class="state-container active">
+          <div class="idle-card">
+            <div class="idle-icon-circle">🐉</div>
+            <h3>Ready for Step-by-Step Dry Run</h3>
+            <p>Select an example testcase or enter sample input above, then click the crimson circular <strong>▶ Run</strong> button to trace your code line-by-line.</p>
+          </div>
+        </div>
+
+        <!-- 2. LOADING STATE (With Shimmer Skeleton) -->
+        <div id="state-loading" class="state-container hidden">
+          <div class="loading-bento-card">
+            <div class="loading-top-status">
+              <span class="spinner-dot"></span>
+              <h3 id="loading-message">Tracing C++ Execution with Gemini AI...</h3>
+            </div>
+            <div class="skeleton-grid">
+              <div class="skeleton-box code-skeleton">
+                <div class="skeleton-line w-60"></div>
+                <div class="skeleton-line w-80"></div>
+                <div class="skeleton-line w-40"></div>
+                <div class="skeleton-line w-90"></div>
+                <div class="skeleton-line w-70"></div>
+              </div>
+              <div class="skeleton-box var-skeleton">
+                <div class="skeleton-row"></div>
+                <div class="skeleton-row"></div>
+                <div class="skeleton-row"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 3. ERROR RESULT STATE -->
+        <div id="state-error" class="state-container hidden">
+          <div class="error-bento-card">
+            <div class="error-badge-icon">⚠️</div>
+            <h3>Dry Run Execution Error</h3>
+            <p id="error-message-text" class="error-text">Failed to execute dry run.</p>
+            <div class="error-actions-group">
+              <button id="error-retry-btn" class="btn-pill-secondary">🔄 Try Again</button>
+              <button id="switch-interpreter-btn" class="btn-pill-primary">⚡ Use Built-in Interpreter</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- 4. STEP-BY-STEP RESULT STATE -->
+        <div id="state-result" class="state-container hidden">
+          
+          <!-- BENTO MAIN GRID (Two Columns: Code & Variables) -->
+          <div class="bento-main-grid">
+
+            <!-- Left Column: "Your Code" Card -->
+            <div class="bento-card code-bento-card">
+              <div class="card-header">
+                <div class="title-group">
+                  <span class="header-icon">💻</span>
+                  <span class="header-title">Your Code</span>
+                </div>
+                <span id="active-line-indicator" class="active-line-pill">Line 1</span>
+              </div>
+              <div id="code-lines-box" class="code-lines-container">
+                <!-- Line elements dynamically inserted here -->
+              </div>
+            </div>
+
+            <!-- Right Column: "Variables" Card -->
+            <div class="bento-card variables-bento-card">
+              <div class="card-header">
+                <div class="title-group">
+                  <span class="header-icon">📊</span>
+                  <span class="header-title">Variables</span>
+                </div>
+              </div>
+              <div class="table-scroll-wrapper">
+                <table class="clean-var-table">
+                  <thead>
+                    <tr>
+                      <th>Variable</th>
+                      <th>Type</th>
+                      <th>Value</th>
+                    </tr>
+                  </thead>
+                  <tbody id="variable-table-body">
+                    <!-- Variables inserted here -->
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+          </div>
+
+          <!-- STEP EXPLANATION & TAB SEGMENTED CONTROLS BAR -->
+          <div class="explanation-tab-row">
+            <div class="explanation-bento-card">
+              <div class="avatar-icon">🐉</div>
+              <span id="line-num-badge" class="line-pill">Line 1</span>
+              <p id="step-explanation" class="explanation-text-content">Initial state before function execution.</p>
+            </div>
+
+            <!-- Segmented Control Tabs -->
+            <div class="segmented-control-bar">
+              <button id="tab-trace-btn" class="segmented-tab active" data-tab="trace">Trace</button>
+              <button id="tab-vars-btn" class="segmented-tab" data-tab="vars">Variables</button>
+              <button id="tab-output-btn" class="segmented-tab" data-tab="output">Output</button>
+            </div>
+          </div>
+
+          <!-- CALL STACK & CONSOLE OUTPUT ROW -->
+          <div id="stack-output-section" class="stack-output-row">
+            <div class="stack-mini-card">
+              <span class="mini-label">Call Stack:</span>
+              <div id="call-stack-list" class="call-stack-tags">
+                <span class="stack-chip">Solution::solve()</span>
+              </div>
+            </div>
+            <div class="output-mini-card">
+              <span class="mini-label">Step Output:</span>
+              <div id="output-text" class="output-text-value">--</div>
+            </div>
+          </div>
+
+          <!-- 🏁 FINAL EXECUTION OUTPUT CARD (Near-Black Rounded Card) -->
+          <div id="final-output-card" class="final-output-bento-card hidden">
+            <div class="final-output-header">
+              <span class="final-badge">🏁 FINAL PROGRAM OUTPUT</span>
+            </div>
+            <pre id="final-output-text" class="final-output-monospace">--</pre>
+          </div>
+
+        </div>
+
+      </section>
+
+      <!-- 🎮 BOTTOM CONTROL BAR WITH STEP DOTS PROGRESS & CIRCULAR BUTTONS -->
+      <footer class="bottom-control-bar">
+        <div class="step-buttons-circle-group">
+          <button id="step-first" class="circle-btn" title="First Step (Home)">⏮</button>
+          <button id="step-prev" class="circle-btn" title="Previous Step (Left Arrow)">◀</button>
+          <button id="step-play" class="circle-btn play-circle-btn" title="Play / Pause Auto Step (Space)">▶</button>
+          <button id="step-next" class="circle-btn" title="Next Step (Right Arrow)">▶</button>
+          <button id="step-last" class="circle-btn" title="Last Step (End)">⏭</button>
+        </div>
+
+        <div class="step-timeline-container">
+          <div class="progress-bar-track">
+            <div id="progress-bar-fill" class="progress-bar-fill" style="width: 0%;"></div>
+          </div>
+          <input type="range" id="step-slider" class="step-range-slider" min="1" max="10" value="1">
+        </div>
+      </footer>
+
+    </main>
 
   </div>
 
