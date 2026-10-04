@@ -112,6 +112,92 @@ public:
   }
 
   /**
+   * Dynamically extracts example test cases from the active LeetCode problem page DOM
+   */
+  function extractExamplesFromDOM() {
+    const examples = [];
+    const container = 
+      document.querySelector('[data-track-load="description_content"]') ||
+      document.querySelector('.elfjS') ||
+      document.querySelector('div[class*="content__"]') ||
+      document.querySelector('div[class*="description"]') ||
+      document.body;
+
+    if (!container) return examples;
+
+    // Strategy 1: Look for <pre> tags containing Input: ...
+    const preElements = container.querySelectorAll('pre');
+    preElements.forEach((pre) => {
+      const text = pre.innerText || pre.textContent || '';
+      if (/input\s*:/i.test(text)) {
+        const inputVal = extractInputText(text);
+        if (inputVal && !examples.some(e => e.input === inputVal)) {
+          examples.push({
+            id: examples.length + 1,
+            label: `Example ${examples.length + 1}`,
+            input: inputVal
+          });
+        }
+      }
+    });
+
+    // Strategy 2: Look for example blocks / elements with Input: ...
+    if (examples.length === 0) {
+      const blocks = container.querySelectorAll('div, section, p, li');
+      blocks.forEach((block) => {
+        const text = block.innerText || block.textContent || '';
+        if (/^input\s*:/i.test(text.trim()) || (text.includes('Input:') && text.includes('Output:'))) {
+          if (block.querySelectorAll('pre').length === 0 && text.length < 600) {
+            const inputVal = extractInputText(text);
+            if (inputVal && !examples.some(e => e.input === inputVal)) {
+              examples.push({
+                id: examples.length + 1,
+                label: `Example ${examples.length + 1}`,
+                input: inputVal
+              });
+            }
+          }
+        }
+      });
+    }
+
+    // Strategy 3: Check window.__NEXT_DATA__
+    if (examples.length === 0 && window.__NEXT_DATA__) {
+      try {
+        const queries = window.__NEXT_DATA__?.props?.pageProps?.dehydratedState?.queries || [];
+        for (const q of queries) {
+          const question = q?.state?.data?.question;
+          if (question && question.exampleTestcaseList && Array.isArray(question.exampleTestcaseList)) {
+            question.exampleTestcaseList.forEach((tc, idx) => {
+              if (tc && tc.trim()) {
+                examples.push({
+                  id: idx + 1,
+                  label: `Example ${idx + 1}`,
+                  input: tc.trim()
+                });
+              }
+            });
+            break;
+          }
+        }
+      } catch (e) {}
+    }
+
+    return examples;
+  }
+
+  function extractInputText(text) {
+    if (!text) return '';
+    const match = text.match(/input\s*:\s*([\s\S]*?)(?=(?:output\s*:|explanation\s*:|example\s+\d+|$))/i);
+    if (match && match[1]) {
+      let clean = match[1].trim();
+      clean = clean.replace(/^`+|`+$/g, '').trim();
+      return clean;
+    }
+    return '';
+  }
+
+  /**
    * Create and inject floating dragon widget on LeetCode page
    */
   function injectFloatingWidget() {
@@ -184,12 +270,14 @@ public:
     if (request.action === 'GET_LEETCODE_CODE') {
       getCodeFromLeetCode().then(code => {
         const metadata = getProblemMetadata();
+        const examples = extractExamplesFromDOM();
         sendResponse({
           success: true,
           code: code,
           slug: metadata.slug,
           title: metadata.title,
-          url: metadata.url
+          url: metadata.url,
+          examples: examples
         });
       });
       return true; // Keep channel open for async response

@@ -39,9 +39,9 @@ document.addEventListener('DOMContentLoaded', async () => {
   const manualCodeInput = document.getElementById('manual-code-input');
   const useManualCodeBtn = document.getElementById('use-manual-code-btn');
 
-  // Presets
-  const preset1Btn = document.getElementById('preset-1-btn');
-  const preset2Btn = document.getElementById('preset-2-btn');
+  // Dynamic Examples Selector & Input Elements
+  const exampleSelectorContainer = document.getElementById('example-selector-container');
+  const exampleStatusSubtext = document.getElementById('example-status-subtext');
   const clearInputBtn = document.getElementById('clear-input-btn');
 
   // State Containers
@@ -92,19 +92,16 @@ document.addEventListener('DOMContentLoaded', async () => {
   const savedApiKey = await StorageService.getGeminiApiKey();
   applySettingsToUI(currentSettings, savedApiKey);
 
-  // Initial Read from Active LeetCode Monaco Editor
-  await readMonacoEditorCode();
-
-  // Load Saved Sample Input
-  const savedInput = await StorageService.getSampleInput(currentProblemSlug);
-  if (savedInput) {
-    sampleInputArea.value = savedInput;
-  } else {
-    sampleInputArea.value = `nums = [2, 7, 11, 15]\ntarget = 9`;
+  // If Gemini API Key is not configured yet, auto-expand settings section for easy access
+  if (!savedApiKey || savedApiKey.trim().length === 0) {
+    settingsSection.classList.remove('hidden');
   }
 
+  // Initial Read from Active LeetCode Monaco Editor & Problem Examples
+  await readMonacoEditorCode();
+
   // --------------------------------------------------------------------------
-  // CORE MONACO EDITOR READER
+  // CORE MONACO EDITOR & EXAMPLE READER
   // --------------------------------------------------------------------------
 
   async function readMonacoEditorCode() {
@@ -125,7 +122,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         return;
       }
 
-      // Execute script in page's MAIN world context to access active Monaco instance
+      // Execute script in page's MAIN world context to access active Monaco instance & DOM description
       const results = await chrome.scripting.executeScript({
         target: { tabId: tab.id },
         world: 'MAIN',
@@ -135,39 +132,55 @@ document.addEventListener('DOMContentLoaded', async () => {
         return null;
       });
 
+      let detectedExamples = [];
+
       if (!results || !results[0] || !results[0].result) {
         const contentRes = await chrome.tabs.sendMessage(tab.id, { action: 'GET_LEETCODE_CODE' }).catch(() => null);
         if (contentRes && contentRes.code) {
+          detectedExamples = contentRes.examples || [];
           const guessedLang = normalizeLanguage('', contentRes.code);
           processExtractedCode(contentRes.code, guessedLang);
+        } else {
+          showError("Unable to access Monaco editor automatically. Please paste your code manually below.");
+          showManualFallback();
+        }
+      } else {
+        const res = results[0].result;
+        if (!res.success) {
+          showError(res.error || "Failed to access Monaco editor.");
+          showManualFallback();
           return;
         }
-        showError("Unable to access Monaco editor automatically. Please paste your code manually below.");
-        showManualFallback();
-        return;
+
+        detectedExamples = res.examples || [];
+        const rawCode = res.code;
+        const rawLang = res.language;
+
+        if (!rawCode || rawCode.trim().length === 0) {
+          showError("LeetCode editor is empty. Please write or paste your solution first.");
+          showManualFallback();
+        } else {
+          const langNorm = normalizeLanguage(rawLang, rawCode);
+          detectedLanguage = langNorm;
+          detectedLangChip.textContent = langNorm;
+          processExtractedCode(rawCode, langNorm);
+        }
       }
 
-      const res = results[0].result;
-      if (!res.success) {
-        showError(res.error || "Failed to access Monaco editor.");
-        showManualFallback();
-        return;
+      // Fallback: If DOM extraction yielded 0 examples, query LeetCode GraphQL API
+      if (detectedExamples.length === 0 && currentProblemSlug && currentProblemSlug !== 'leetcode-problem') {
+        try {
+          const details = await LeetCodeHelper.fetchProblemDetails(currentProblemSlug);
+          if (details && details.exampleTestcases) {
+            detectedExamples = LeetCodeHelper.parseGraphQLTestcases(details.exampleTestcases);
+          }
+        } catch (gqlErr) {
+          console.warn("[DryRun] GraphQL example fallback error:", gqlErr);
+        }
       }
 
-      const rawCode = res.code;
-      const rawLang = res.language;
-
-      if (!rawCode || rawCode.trim().length === 0) {
-        showError("LeetCode editor is empty. Please write or paste your solution first.");
-        showManualFallback();
-        return;
-      }
-
-      const langNorm = normalizeLanguage(rawLang, rawCode);
-      detectedLanguage = langNorm;
-      detectedLangChip.textContent = langNorm;
-
-      processExtractedCode(rawCode, langNorm);
+      // Render dynamic examples or manual fallback subtext
+      await handleExtractedExamples(detectedExamples);
 
     } catch (err) {
       console.error("[DryRun] Monaco read error:", err);
@@ -256,11 +269,86 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
       }
 
+      // Extract DOM examples from problem description container
+      const examples = [];
+      try {
+        const container = 
+          document.querySelector('[data-track-load="description_content"]') ||
+          document.querySelector('.elfjS') ||
+          document.querySelector('div[class*="content__"]') ||
+          document.querySelector('div[class*="description"]') ||
+          document.body;
+
+        if (container) {
+          const pres = container.querySelectorAll('pre');
+          pres.forEach((pre) => {
+            const text = pre.innerText || pre.textContent || '';
+            if (/input\s*:/i.test(text)) {
+              const mMatch = text.match(/input\s*:\s*([\s\S]*?)(?=(?:output\s*:|explanation\s*:|example\s+\d+|$))/i);
+              if (mMatch && mMatch[1]) {
+                const clean = mMatch[1].trim().replace(/^`+|`+$/g, '').trim();
+                if (clean && !examples.some(e => e.input === clean)) {
+                  examples.push({
+                    id: examples.length + 1,
+                    label: `Example ${examples.length + 1}`,
+                    input: clean
+                  });
+                }
+              }
+            }
+          });
+
+          if (examples.length === 0) {
+            const blocks = container.querySelectorAll('div, section, p, li');
+            blocks.forEach((block) => {
+              const text = block.innerText || block.textContent || '';
+              if (/^input\s*:/i.test(text.trim()) || (text.includes('Input:') && text.includes('Output:'))) {
+                if (block.querySelectorAll('pre').length === 0 && text.length < 600) {
+                  const mMatch = text.match(/input\s*:\s*([\s\S]*?)(?=(?:output\s*:|explanation\s*:|example\s+\d+|$))/i);
+                  if (mMatch && mMatch[1]) {
+                    const clean = mMatch[1].trim().replace(/^`+|`+$/g, '').trim();
+                    if (clean && !examples.some(e => e.input === clean)) {
+                      examples.push({
+                        id: examples.length + 1,
+                        label: `Example ${examples.length + 1}`,
+                        input: clean
+                      });
+                    }
+                  }
+                }
+              }
+            });
+          }
+
+          if (examples.length === 0 && window.__NEXT_DATA__) {
+            const queries = window.__NEXT_DATA__?.props?.pageProps?.dehydratedState?.queries || [];
+            for (const q of queries) {
+              const question = q?.state?.data?.question;
+              if (question && question.exampleTestcaseList && Array.isArray(question.exampleTestcaseList)) {
+                question.exampleTestcaseList.forEach((tc, idx) => {
+                  if (tc && tc.trim()) {
+                    examples.push({
+                      id: idx + 1,
+                      label: `Example ${idx + 1}`,
+                      input: tc.trim()
+                    });
+                  }
+                });
+                break;
+              }
+            }
+          }
+        }
+      } catch (eEx) {
+        console.warn('[DryRun] DOM example extraction warning:', eEx);
+      }
+
       return {
         success: true,
         code: code || '',
         language: lang || '',
-        methodUsed: methodUsed || 'None'
+        methodUsed: methodUsed || 'None',
+        examples: examples
       };
     } catch (e) {
       return { success: false, error: e.toString() };
@@ -422,16 +510,6 @@ document.addEventListener('DOMContentLoaded', async () => {
       speedLabel.textContent = `${stepSpeedInput.value}ms`;
       saveCurrentSettings();
     });
-  });
-
-  preset1Btn.addEventListener('click', () => {
-    sampleInputArea.value = `nums = [2, 7, 11, 15]\ntarget = 9`;
-    StorageService.saveSampleInput(currentProblemSlug, sampleInputArea.value);
-  });
-
-  preset2Btn.addEventListener('click', () => {
-    sampleInputArea.value = `s = "abcabcbb"`;
-    StorageService.saveSampleInput(currentProblemSlug, sampleInputArea.value);
   });
 
   clearInputBtn.addEventListener('click', () => {
@@ -861,12 +939,73 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
 
   function updateKeyStatusBadge(key) {
-    if (key && key.length > 5) {
-      keySavedStatus.textContent = '✅ Key Saved';
+    const trimmed = (key || '').trim();
+    if (trimmed.length > 0) {
+      const masked = trimmed.length > 4 ? trimmed.slice(-4) : trimmed;
+      keySavedStatus.textContent = `✅ Key Set (••••${masked})`;
       keySavedStatus.className = 'key-status-badge configured';
     } else {
-      keySavedStatus.textContent = 'Not Set';
+      keySavedStatus.textContent = '⚠️ Not Set';
       keySavedStatus.className = 'key-status-badge unconfigured';
+    }
+  }
+
+  async function handleExtractedExamples(examples) {
+    if (!exampleSelectorContainer) return;
+    exampleSelectorContainer.innerHTML = '';
+
+    if (!examples || examples.length === 0) {
+      exampleSelectorContainer.classList.add('hidden');
+      if (exampleStatusSubtext) {
+        exampleStatusSubtext.textContent = 'No detectable examples found. Enter custom input manually below:';
+        exampleStatusSubtext.classList.remove('hidden');
+      }
+
+      const savedInput = await StorageService.getSampleInput(currentProblemSlug);
+      if (savedInput) {
+        sampleInputArea.value = savedInput;
+      }
+      return;
+    }
+
+    if (exampleStatusSubtext) {
+      exampleStatusSubtext.classList.add('hidden');
+    }
+    exampleSelectorContainer.classList.remove('hidden');
+
+    const savedInput = await StorageService.getSampleInput(currentProblemSlug);
+    let selectedIdx = 0;
+
+    if (savedInput) {
+      const matchIdx = examples.findIndex(e => e.input.trim() === savedInput.trim());
+      if (matchIdx !== -1) {
+        selectedIdx = matchIdx;
+      }
+    }
+
+    examples.forEach((ex, idx) => {
+      const btn = document.createElement('button');
+      btn.className = `example-selector-btn ${idx === selectedIdx ? 'active' : ''}`;
+      btn.textContent = ex.label || `Example ${idx + 1}`;
+      btn.title = ex.input;
+
+      btn.addEventListener('click', () => {
+        const allBtns = exampleSelectorContainer.querySelectorAll('.example-selector-btn');
+        allBtns.forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+
+        sampleInputArea.value = ex.input;
+        StorageService.saveSampleInput(currentProblemSlug, ex.input);
+      });
+
+      exampleSelectorContainer.appendChild(btn);
+    });
+
+    if (savedInput && savedInput.trim().length > 0) {
+      sampleInputArea.value = savedInput;
+    } else {
+      sampleInputArea.value = examples[selectedIdx].input;
+      StorageService.saveSampleInput(currentProblemSlug, examples[selectedIdx].input);
     }
   }
 

@@ -81,4 +81,41 @@ export class LeetCodeHelper {
     if (!rawTestcases) return [];
     return rawTestcases.trim().split('\n').filter(line => line.length > 0);
   }
+
+  /**
+   * Converts raw GraphQL exampleTestcases string into structured example array
+   * e.g., "[2,7,11,15]\n9\n[3,2,4]\n6" -> [{ id: 1, label: 'Example 1', input: "[2,7,11,15]\n9" }, ...]
+   */
+  static parseGraphQLTestcases(rawTestcases) {
+    if (!rawTestcases) return [];
+    const lines = rawTestcases.trim().split('\n').map(l => l.trim()).filter(Boolean);
+    if (lines.length === 0) return [];
+
+    // Group lines if testcase contains multiple parameters, or map each block
+    const examples = [];
+    let currentInput = [];
+    lines.forEach((line) => {
+      currentInput.push(line);
+      // Rough heuristic: if line ends a parameter set or every 1-2 parameters
+      if (currentInput.length >= 2 || lines.length <= 3) {
+        examples.push({
+          id: examples.length + 1,
+          label: `Example ${examples.length + 1}`,
+          input: currentInput.join('\n')
+        });
+        currentInput = [];
+      }
+    });
+
+    if (currentInput.length > 0) {
+      examples.push({
+        id: examples.length + 1,
+        label: `Example ${examples.length + 1}`,
+        input: currentInput.join('\n')
+      });
+    }
+
+    return examples;
+  }
 }
+

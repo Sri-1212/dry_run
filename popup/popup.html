@@ -24,8 +24,8 @@
         <span class="status-indicator" id="connection-status" title="Connected to LeetCode Monaco Editor">
           <span class="status-dot"></span> Online
         </span>
-        <button id="toggle-settings-btn" class="icon-btn" title="API & Execution Settings">
-          ⚙️
+        <button id="toggle-settings-btn" class="icon-btn btn-settings-toggle" title="API & Execution Settings">
+          ⚙️ Settings
         </button>
       </div>
     </header>
@@ -99,7 +99,7 @@
         <div id="gemini-key-group" class="form-group">
           <div class="label-with-status">
             <label for="gemini-api-key">Gemini API Key:</label>
-            <span id="key-saved-status" class="key-status-badge unconfigured">Not Set</span>
+            <span id="key-saved-status" class="key-status-badge unconfigured">⚠️ Not Set</span>
           </div>
           <div class="input-with-btn">
             <input type="password" id="gemini-api-key" placeholder="Enter Gemini API Key (AIzaSy...)" autocomplete="off">
@@ -129,12 +129,14 @@
     <section class="sample-input-section">
       <div class="section-label-bar">
         <label for="sample-input">Sample Input Test Case:</label>
-        <div class="preset-btns">
-          <button id="preset-1-btn" class="btn-mini">Preset 1</button>
-          <button id="preset-2-btn" class="btn-mini">Preset 2</button>
-          <button id="clear-input-btn" class="btn-mini text-danger">Clear</button>
+        <div class="sample-input-actions">
+          <div id="example-selector-container" class="example-selector-container">
+            <!-- Dynamic LeetCode Example buttons (Example 1, Example 2) inserted here -->
+          </div>
+          <button id="clear-input-btn" class="btn-mini text-danger" title="Clear input textarea">Clear</button>
         </div>
       </div>
+      <div id="example-status-subtext" class="example-status-subtext hidden"></div>
       <textarea id="sample-input" placeholder="nums = [2, 7, 11, 15]&#10;target = 9" rows="2"></textarea>
     </section>
 
