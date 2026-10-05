@@ -55,57 +55,45 @@ async function handleGeminiAiTrace(code, language, input) {
 
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`;
 
-    const prompt = `
-You are an exact, step-by-step code execution tracer for LeetCode.
-The user's solution is written in ${language}.
-Your only job is to TRACE what the code actually does — step by step — with the provided input.
-
-Strict rules:
-1. Follow the user's exact ${language} source code line by line. Do not alter, fix, or reorder it.
-2. Use 1-based line numbers matching the exact source code supplied.
-3. At every step, record the current values of ALL in-scope variables, including:
-   - Primitives (int, bool, char, float, double, etc.)
-   - Strings
-   - Arrays, lists, vectors, slices
-   - Maps, dicts, hashmaps, sets
-   - Stacks, queues, deques
-   - Objects/structs (show their fields)
-4. The "explanation" field must describe only what is happening at that exact line — nothing more.
-5. Never fix the code, never suggest improvements, never give hints, never provide the correct LeetCode solution.
-6. Never judge whether the algorithm is correct, optimal, or wrong.
-7. If the code has a bug or undefined behavior, trace the exact behavior the code would produce — including wrong outputs.
-8. Limit the trace to at most 40 meaningful steps. Merge consecutive identical loop iterations into a single summarized step when the variable change is repetitive.
-9. If no sample input is provided, invent a small, reasonable test input for the function and state it clearly in the first step's explanation.
-10. Return ONLY valid JSON with no markdown, no commentary, no code fences — just the raw JSON object:
-{
-  "steps": [
-    {
-      "step": 1,
-      "line": 5,
-      "explanation": "brief explanation of what this exact line does right now",
-      "variables": {
-        "i": 0,
-        "sum": 0
-      }
-    }
-  ],
-  "output": "the final return value or printed output of the code"
-}
-
-[LANGUAGE]
-${language}
-
-[SOURCE CODE TO TRACE]
-${code}
-
-[SAMPLE INPUT]
-${input ? input : '(none provided — use a small reasonable default and note it in step 1)'}
-`;
+    const systemPrompt = `Act as a strict C++ code tracer. Trace exactly what the given code does with the given input, line by line. Use 1-based line numbers matching the supplied code. Never suggest fixes, never give the solution, never mention the optimal approach, and never judge correctness. If the code has a bug or undefined behavior, trace the buggy behavior faithfully. Record the in-scope variables at each step as name/value pairs, with values represented as strings. Return no more than 40 steps, merging repetitive loop iterations. If no input is provided, choose a small input and state it in the first explanation. Return only JSON matching the required schema.`;
+    const prompt = `[SOURCE CODE]\n${code}\n\n[SELECTED TESTCASE INPUT]\n${input || '(none provided)'}`;
 
     const requestBody = {
+      systemInstruction: { parts: [{ text: systemPrompt }] },
       contents: [{ parts: [{ text: prompt }] }],
       generationConfig: {
         responseMimeType: "application/json",
+        responseSchema: {
+          type: "OBJECT",
+          properties: {
+            steps: {
+              type: "ARRAY",
+              items: {
+                type: "OBJECT",
+                properties: {
+                  step: { type: "INTEGER" },
+                  line: { type: "INTEGER" },
+                  explanation: { type: "STRING" },
+                  variables: {
+                    type: "ARRAY",
+                    items: {
+                      type: "OBJECT",
+                      properties: {
+                        name: { type: "STRING" },
+                        value: { type: "STRING" }
+                      },
+                      required: ["name", "value"]
+                    }
+                  },
+                  output: { type: "STRING" }
+                },
+                required: ["step", "line", "explanation", "variables"]
+              }
+            },
+            output: { type: "STRING" }
+          },
+          required: ["steps", "output"]
+        },
         temperature: 0.1
       }
     };
@@ -118,11 +106,23 @@ ${input ? input : '(none provided — use a small reasonable default and note it
 
     if (!response.ok) {
       const errJson = await response.json().catch(() => ({}));
-      const errMsg = errJson.error?.message || `Gemini API returned status ${response.status}`;
-      return { success: false, error: `Gemini API Error: ${errMsg}` };
+      console.error('[DryRun SW] Gemini API error response:', errJson);
+      const apiMessage = errJson.error?.message || '';
+      const errorCode = errJson.error?.status || '';
+      if (response.status === 401 || /api key not valid|invalid api key/i.test(apiMessage)) {
+        return { success: false, error: 'Invalid API key. Check GEMINI_API_KEY in config.js.' };
+      }
+      if (response.status === 404 || /not found/i.test(apiMessage)) {
+        return { success: false, error: `Model not found: ${modelName}. Check GEMINI_MODEL in config.js.` };
+      }
+      if (response.status === 429 || /resource_exhausted|rate limit/i.test(errorCode + apiMessage)) {
+        return { success: false, error: 'Rate limit reached. Wait a moment and try again.' };
+      }
+      return { success: false, error: apiMessage || `Gemini API returned status ${response.status}` };
     }
 
     const data = await response.json();
+    console.log('[DryRun SW] Gemini raw API response:', data);
     const rawText = data.candidates?.[0]?.content?.parts?.[0]?.text;
 
     if (!rawText) {
@@ -143,32 +143,42 @@ ${input ? input : '(none provided — use a small reasonable default and note it
     }
 
     // Validate tracing contract structure
-    if (!parsed || !Array.isArray(parsed.steps) || parsed.steps.length === 0) {
+    if (!parsed || !Array.isArray(parsed.steps) || parsed.steps.length === 0 || parsed.steps.length > 40) {
       return {
         success: false,
-        error: "Invalid trace response schema from Gemini API. Missing steps array."
+        error: "Invalid trace response from Gemini API. Expected between 1 and 40 steps."
       };
     }
 
-    // Normalize steps array matching contract
-    const normalizedSteps = parsed.steps.map((s, index) => ({
-      step: s.step || (index + 1),
-      line: s.line || s.lineNumber || 1,
-      explanation: s.explanation || `Executing line ${s.line || index + 1}`,
-      variables: s.variables || {},
-      callStack: Array.isArray(s.callStack) ? s.callStack : ['Solution::solve()']
-    }));
+    const normalizedSteps = [];
+    for (const [index, step] of parsed.steps.entries()) {
+      if (!step || !Number.isInteger(step.step) || !Number.isInteger(step.line) ||
+          typeof step.explanation !== 'string' || !Array.isArray(step.variables) ||
+          !step.variables.every(variable => variable && typeof variable.name === 'string' &&
+            (typeof variable.value === 'string' || typeof variable.value === 'number' || typeof variable.value === 'boolean'))) {
+        return { success: false, error: `Invalid trace response: step ${index + 1} has an invalid shape.` };
+      }
+
+      normalizedSteps.push({
+        step: step.step,
+        line: step.line,
+        explanation: step.explanation,
+        variables: Object.fromEntries(step.variables.map(variable => [variable.name, variable.value])),
+        ...(typeof step.output === 'string' ? { output: step.output } : {}),
+        callStack: ['Solution::solve()']
+      });
+    }
 
     return {
       success: true,
       trace: {
         steps: normalizedSteps,
-        output: parsed.output || "Execution completed"
+        output: typeof parsed.output === 'string' ? parsed.output : "Execution completed"
       }
     };
 
   } catch (err) {
     console.error("[DryRun SW] Gemini trace error:", err);
-    return { success: false, error: `AI Execution Error: ${err.message}` };
+    return { success: false, error: err.message || 'Could not connect to Gemini. Check your network and try again.' };
   }
 }

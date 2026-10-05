@@ -10,6 +10,7 @@
     "scripting"
   ],
   "host_permissions": [
+    "https://generativelanguage.googleapis.com/*",
     "https://leetcode.com/*",
     "https://leetcode.cn/*"
   ],

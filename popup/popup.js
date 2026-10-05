@@ -98,13 +98,16 @@ document.addEventListener('DOMContentLoaded', async () => {
       currentProblemSlug = LeetCodeHelper.extractProblemSlug(tab.url) || 'leetcode-problem';
       problemTitleEl.textContent = LeetCodeHelper.formatTitle(currentProblemSlug);
 
-      if (!tab.url.includes('leetcode.com') && !tab.url.includes('leetcode.cn')) {
+      const pageUrl = new URL(tab.url);
+      const isLeetCodeHost = pageUrl.hostname === 'leetcode.com' || pageUrl.hostname.endsWith('.leetcode.com') ||
+        pageUrl.hostname === 'leetcode.cn' || pageUrl.hostname.endsWith('.leetcode.cn');
+      if (!isLeetCodeHost || !pageUrl.pathname.startsWith('/problems/')) {
         showError("Please open a problem page on leetcode.com before running Dry Run.");
         showManualFallback();
         return;
       }
 
-      // Execute script in page's MAIN world context to access active Monaco instance & DOM description
+      // Read the first Monaco model in the page's MAIN world, then fall back to visible editor lines.
       const results = await chrome.scripting.executeScript({
         target: { tabId: tab.id },
         world: 'MAIN',
@@ -118,12 +121,12 @@ document.addEventListener('DOMContentLoaded', async () => {
 
       if (!results || !results[0] || !results[0].result) {
         const contentRes = await chrome.tabs.sendMessage(tab.id, { action: 'GET_LEETCODE_CODE' }).catch(() => null);
-        if (contentRes && contentRes.code) {
+        if (contentRes && contentRes.success && contentRes.code) {
           detectedExamples = contentRes.examples || [];
           const guessedLang = normalizeLanguage('', contentRes.code);
           processExtractedCode(contentRes.code, guessedLang);
         } else {
-          showError("Unable to access Monaco editor automatically. Please paste your code manually below.");
+          showError("Could not read editor. Please paste your code manually below.");
           showManualFallback();
         }
       } else {
@@ -139,7 +142,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         const rawLang = res.language;
 
         if (!rawCode || rawCode.trim().length === 0) {
-          showError("LeetCode editor is empty. Please write or paste your solution first.");
+          showError("Could not read editor: the LeetCode editor is empty. Please write or paste your solution first.");
           showManualFallback();
         } else {
           const langNorm = normalizeLanguage(rawLang, rawCode);
@@ -178,57 +181,13 @@ document.addEventListener('DOMContentLoaded', async () => {
       let methodUsed = '';
 
       const m = window.monaco || window.Monaco;
-      if (m && m.editor) {
-        // Strategy 1: Active Monaco Editor instance via monaco.editor.getEditors()
-        if (m.editor.getEditors) {
-          const editors = m.editor.getEditors();
-          for (const ed of editors) {
-            const model = typeof ed.getModel === 'function' ? ed.getModel() : null;
-            if (model) {
-              const val = typeof model.getValue === 'function' ? model.getValue() : '';
-              if (val && val.trim().length > 0) {
-                code = val;
-                lang = typeof model.getLanguageId === 'function' ? model.getLanguageId() : '';
-                methodUsed = 'monaco.editor.getEditors() -> model.getLanguageId() & model.getValue()';
-                break;
-              }
-            }
-          }
-        }
-
-        // Strategy 2: Active model matching C++ or non-empty value via monaco.editor.getModels()
-        if (!code && m.editor.getModels) {
-          const models = m.editor.getModels();
-          if (models && models.length > 0) {
-            let activeModel = models.find(mod => {
-              if (mod && mod.isDisposed && mod.isDisposed()) return false;
-              const lId = typeof mod.getLanguageId === 'function' ? mod.getLanguageId() : '';
-              return lId === 'cpp' || lId === 'c++' || lId === 'cpp20';
-            });
-
-            if (!activeModel) {
-              for (let i = models.length - 1; i >= 0; i--) {
-                const mod = models[i];
-                if (mod && (!mod.isDisposed || !mod.isDisposed())) {
-                  const val = typeof mod.getValue === 'function' ? mod.getValue() : '';
-                  if (val && val.trim().length > 0) {
-                    activeModel = mod;
-                    break;
-                  }
-                }
-              }
-            }
-
-            if (activeModel) {
-              if (typeof activeModel.getValue === 'function') {
-                code = activeModel.getValue();
-              }
-              if (typeof activeModel.getLanguageId === 'function') {
-                lang = activeModel.getLanguageId();
-              }
-              methodUsed = 'monaco.editor.getModels() -> model.getLanguageId() & model.getValue()';
-            }
-          }
+      if (m && m.editor && typeof m.editor.getModels === 'function') {
+        const models = m.editor.getModels();
+        const firstModel = models && models[0];
+        if (firstModel && typeof firstModel.getValue === 'function') {
+          code = firstModel.getValue();
+          lang = typeof firstModel.getLanguageId === 'function' ? firstModel.getLanguageId() : '';
+          methodUsed = 'monaco.editor.getModels()[0].getValue()';
         }
       }
 
@@ -243,7 +202,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
       }
 
-      if (!code) {
+      if (!code || !code.trim()) {
         const viewLines = document.querySelectorAll('.monaco-editor .view-line');
         if (viewLines && viewLines.length > 0) {
           code = Array.from(viewLines).map(l => l.textContent || '').join('\n');
@@ -333,7 +292,18 @@ document.addEventListener('DOMContentLoaded', async () => {
         examples: examples
       };
     } catch (e) {
-      return { success: false, error: e.toString() };
+      const viewLines = document.querySelectorAll('.monaco-editor .view-line');
+      const fallbackCode = Array.from(viewLines).map(line => line.textContent || '').join('\n');
+      if (fallbackCode.trim()) {
+        return {
+          success: true,
+          code: fallbackCode,
+          language: '',
+          methodUsed: 'DOM (.monaco-editor .view-line)',
+          examples: []
+        };
+      }
+      return { success: false, error: 'Could not read editor.' };
     }
   }
 
@@ -587,7 +557,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     const traceData = response.trace;
-    traceSteps = traceData.steps || [];
+    traceSteps = Array.isArray(traceData?.steps) ? traceData.steps : [];
     finalTraceOutput = traceData.output || "Execution completed";
 
     if (traceSteps.length === 0) {
@@ -639,7 +609,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
 
     const prevVars = idx > 0 ? (traceSteps[idx - 1].variables || {}) : {};
-    renderVariables(step.variables || {}, prevVars, idx);
+    renderVariables(normalizeVariables(step.variables), normalizeVariables(prevVars), idx);
     renderCallStack(step.callStack || ['Solution::solve()']);
     outputText.textContent = step.output || '--';
 
@@ -746,6 +716,15 @@ document.addEventListener('DOMContentLoaded', async () => {
         changedVarsBadge.textContent = 'No Changes';
       }
     }
+  }
+
+  function normalizeVariables(variables) {
+    if (Array.isArray(variables)) {
+      return Object.fromEntries(variables
+        .filter(variable => variable && typeof variable.name === 'string')
+        .map(variable => [variable.name, variable.value]));
+    }
+    return variables && typeof variables === 'object' ? variables : {};
   }
 
   // Format arrays, vectors, maps, stacks, strings, booleans, and numbers
