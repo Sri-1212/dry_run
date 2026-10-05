@@ -11,32 +11,18 @@ document.addEventListener('DOMContentLoaded', async () => {
   // DOM Elements
   const problemTitleEl = document.getElementById('problem-title');
   const detectedLangChip = document.getElementById('detected-lang-chip');
+  const connectionStatusText = document.getElementById('connection-status-text');
   const fetchCodeBtn = document.getElementById('fetch-code-btn');
   const sampleInputArea = document.getElementById('sample-input');
   const startDryRunBtn = document.getElementById('start-dryrun-btn');
 
-  // Verification Banner Elements
-  const verificationBanner = document.getElementById('verification-banner');
-  const verifyLangBadge = document.getElementById('verify-lang-badge');
-  const verifyLengthBadge = document.getElementById('verify-length-badge');
-  const verifyCodeSnippet = document.getElementById('verify-code-snippet');
-  const verifyPlayBtn = document.getElementById('verify-play-btn');
-
-  // Manual Fallback Elements
-  const manualFallbackSection = document.getElementById('manual-fallback-section');
-  const manualCodeInput = document.getElementById('manual-code-input');
-  const useManualCodeBtn = document.getElementById('use-manual-code-btn');
-
   // Dynamic Examples Selector & Input Elements
   const exampleSelectorContainer = document.getElementById('example-selector-container');
-  const exampleStatusSubtext = document.getElementById('example-status-subtext');
   const clearInputBtn = document.getElementById('clear-input-btn');
 
   // State Containers
-  const stateIdle = document.getElementById('state-idle');
   const stateLoading = document.getElementById('state-loading');
   const stateError = document.getElementById('state-error');
-  const stateResult = document.getElementById('state-result');
   const loadingMessage = document.getElementById('loading-message');
   const errorMessageText = document.getElementById('error-message-text');
   const errorRetryBtn = document.getElementById('error-retry-btn');
@@ -57,11 +43,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   const activeLineIndicator = document.getElementById('active-line-indicator');
   const changedVarsBadge = document.getElementById('changed-vars-badge');
   const variableTableBody = document.getElementById('variable-table-body');
-  const callStackList = document.getElementById('call-stack-list');
   const outputText = document.getElementById('output-text');
-  const finalOutputCard = document.getElementById('final-output-card');
-  const finalOutputText = document.getElementById('final-output-text');
-  const openDevtoolsLink = document.getElementById('open-devtools-link');
 
   // App State Variables
   let currentSettings = {};
@@ -78,9 +60,10 @@ document.addEventListener('DOMContentLoaded', async () => {
   // Load Saved Settings
   currentSettings = await StorageService.getSettings();
   stepSpeedMs = currentSettings.stepSpeedMs || 800;
-
-  // Initial Read from Active LeetCode Monaco Editor & Problem Examples
-  await readMonacoEditorCode();
+  document.body.classList.add('dark-mode');
+  chrome.storage.local.get(['themePreference'], (res) => {
+    if (res && res.themePreference === 'light') document.body.classList.remove('dark-mode');
+  });
 
   // --------------------------------------------------------------------------
   // CORE MONACO EDITOR & EXAMPLE READER
@@ -91,7 +74,6 @@ document.addEventListener('DOMContentLoaded', async () => {
       const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
       if (!tab || !tab.url) {
         showError("No active tab found. Please navigate to a LeetCode problem page.");
-        showManualFallback();
         return;
       }
 
@@ -103,7 +85,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         pageUrl.hostname === 'leetcode.cn' || pageUrl.hostname.endsWith('.leetcode.cn');
       if (!isLeetCodeHost || !pageUrl.pathname.startsWith('/problems/')) {
         showError("Please open a problem page on leetcode.com before running Dry Run.");
-        showManualFallback();
         return;
       }
 
@@ -126,14 +107,13 @@ document.addEventListener('DOMContentLoaded', async () => {
           const guessedLang = normalizeLanguage('', contentRes.code);
           processExtractedCode(contentRes.code, guessedLang);
         } else {
-          showError("Could not read editor. Please paste your code manually below.");
-          showManualFallback();
+          connectionStatusText.textContent = 'Editor unavailable';
+          showError("Could not read editor. Confirm a LeetCode problem is open, then try Read Editor again.");
         }
       } else {
         const res = results[0].result;
         if (!res.success) {
           showError(res.error || "Failed to access Monaco editor.");
-          showManualFallback();
           return;
         }
 
@@ -143,7 +123,6 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         if (!rawCode || rawCode.trim().length === 0) {
           showError("Could not read editor: the LeetCode editor is empty. Please write or paste your solution first.");
-          showManualFallback();
         } else {
           const langNorm = normalizeLanguage(rawLang, rawCode);
           detectedLanguage = langNorm;
@@ -170,7 +149,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     } catch (err) {
       console.error("[DryRun] Monaco read error:", err);
       showError(`Monaco Access Error: ${err.message}`);
-      showManualFallback();
     }
   }
 
@@ -372,30 +350,14 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   function processExtractedCode(code, lang) {
     extractedCppCode = code;
-    hideManualFallback();
-
-    const lines = code.split('\n');
-    const firstFewLines = lines.slice(0, 4).join('\n');
-
-    verifyLangBadge.textContent = lang;
-    verifyLengthBadge.textContent = `${code.length} chars (${lines.length} lines)`;
-    verifyCodeSnippet.textContent = firstFewLines || code.substring(0, 100);
-    verificationBanner.classList.remove('hidden');
+    detectedLanguage = lang;
+    detectedLangChip.textContent = lang;
+    connectionStatusText.textContent = 'Editor ready';
+    renderCodeViewer(code);
 
     if (stateError.classList.contains('active')) {
       switchState('idle');
     }
-  }
-
-  function showManualFallback() {
-    manualFallbackSection.classList.remove('hidden');
-    if (extractedCppCode) {
-      manualCodeInput.value = extractedCppCode;
-    }
-  }
-
-  function hideManualFallback() {
-    manualFallbackSection.classList.add('hidden');
   }
 
   function showError(msg) {
@@ -410,66 +372,22 @@ document.addEventListener('DOMContentLoaded', async () => {
   // Sync / Re-read Monaco Editor Code
   fetchCodeBtn.addEventListener('click', async () => {
     fetchCodeBtn.disabled = true;
-    fetchCodeBtn.textContent = '🔄 Reading...';
+    fetchCodeBtn.classList.add('is-loading');
     await readMonacoEditorCode();
     fetchCodeBtn.disabled = false;
-    fetchCodeBtn.textContent = '🔄 Read Editor';
-  });
-
-  verifyPlayBtn.addEventListener('click', () => {
-    startDryRun();
-  });
-
-  useManualCodeBtn.addEventListener('click', () => {
-    const manualCode = manualCodeInput.value.trim();
-    if (!manualCode) {
-      alert("Please paste valid C++ solution code.");
-      return;
-    }
-    processExtractedCode(manualCode, 'C++');
-    startDryRun();
+    fetchCodeBtn.classList.remove('is-loading');
   });
 
   const themeToggleBtn = document.getElementById('theme-toggle-btn');
   if (themeToggleBtn) {
-    chrome.storage.local.get(['themePreference'], (res) => {
-      if (res && res.themePreference === 'dark') {
-        document.body.classList.add('dark-mode');
-      }
-    });
-
     themeToggleBtn.addEventListener('click', () => {
       document.body.classList.toggle('dark-mode');
       const isDark = document.body.classList.contains('dark-mode');
       chrome.storage.local.set({ themePreference: isDark ? 'dark' : 'light' });
+      themeToggleBtn.title = isDark ? 'Switch to light theme' : 'Switch to dark theme';
+      themeToggleBtn.setAttribute('aria-label', themeToggleBtn.title);
     });
   }
-
-  const tabTraceBtn = document.getElementById('tab-trace-btn');
-  const tabVarsBtn = document.getElementById('tab-vars-btn');
-  const tabOutputBtn = document.getElementById('tab-output-btn');
-  const segmentedTabs = [tabTraceBtn, tabVarsBtn, tabOutputBtn];
-
-  segmentedTabs.forEach(tabBtn => {
-    if (!tabBtn) return;
-    tabBtn.addEventListener('click', () => {
-      segmentedTabs.forEach(b => b && b.classList.remove('active'));
-      tabBtn.classList.add('active');
-
-      const targetTab = tabBtn.dataset.tab;
-      const codeBento = document.querySelector('.code-bento-card');
-      const varsBento = document.querySelector('.variables-bento-card');
-      const stackOutputSec = document.getElementById('stack-output-section');
-
-      if (targetTab === 'trace') {
-        if (codeBento) codeBento.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-      } else if (targetTab === 'vars') {
-        if (varsBento) varsBento.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-      } else if (targetTab === 'output') {
-        if (stackOutputSec) stackOutputSec.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-      }
-    });
-  });
 
   clearInputBtn.addEventListener('click', () => {
     sampleInputArea.value = '';
@@ -516,10 +434,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
   });
 
-  openDevtoolsLink.addEventListener('click', () => {
-    alert("To view in DevTools: Press F12 or Right Click -> Inspect, and open the 'Dry Run C++' tab!");
-  });
-
   // --------------------------------------------------------------------------
   // EXECUTION PIPELINE (AI Tracing via Background SW & Local Interpreter Fallback)
   // --------------------------------------------------------------------------
@@ -531,7 +445,6 @@ document.addEventListener('DOMContentLoaded', async () => {
       await readMonacoEditorCode();
       if (!extractedCppCode || extractedCppCode.trim().length === 0) {
         showError("No solution code found. Please open a LeetCode problem with code in the editor.");
-        showManualFallback();
         return;
       }
     }
@@ -539,7 +452,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     switchState('loading');
 
     const input = sampleInputArea.value;
-    loadingMessage.textContent = `Sending ${detectedLanguage} code to Gemini for step-by-step trace...`;
+    loadingMessage.textContent = 'Tracing testcase with Gemini...';
 
     // Call Background Service Worker to execute Gemini AI tracing
     const response = await new Promise((resolve) => {
@@ -610,21 +523,15 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     const prevVars = idx > 0 ? (traceSteps[idx - 1].variables || {}) : {};
     renderVariables(normalizeVariables(step.variables), normalizeVariables(prevVars), idx);
-    renderCallStack(step.callStack || ['Solution::solve()']);
-    outputText.textContent = step.output || '--';
-
-    // Requirement #10: Final output after trace finishes / on final step
-    if (idx === traceSteps.length - 1) {
-      const displayFinal = step.output || finalTraceOutput || "Execution completed";
-      if (finalOutputText) finalOutputText.textContent = displayFinal;
-      if (finalOutputCard) finalOutputCard.classList.remove('hidden');
-    } else {
-      if (finalOutputCard) finalOutputCard.classList.add('hidden');
-    }
+    outputText.textContent = step.output || (idx === traceSteps.length - 1 ? finalTraceOutput : '--');
   }
 
   function renderCodeViewer(code) {
     codeLinesBox.innerHTML = '';
+    if (!code) {
+      codeLinesBox.innerHTML = '<div class="code-empty-state">Click Read Editor</div>';
+      return;
+    }
     const lines = code.split('\n');
     lines.forEach((line, index) => {
       const lineNum = index + 1;
@@ -674,7 +581,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     if (keys.length === 0) {
       variableTableBody.innerHTML = `<tr><td colspan="3" style="text-align:center; color:#6b7280; padding:8px;">No local variables initialized in scope</td></tr>`;
-      if (changedVarsBadge) changedVarsBadge.textContent = 'Step Scope';
+      if (changedVarsBadge) changedVarsBadge.textContent = '0 changed';
       return;
     }
 
@@ -695,8 +602,8 @@ document.addEventListener('DOMContentLoaded', async () => {
 
       const typeStr = getTypeStr(val);
       const valHtml = formatVariableValue(val);
-      const nameHtml = isChanged 
-        ? `${escapeHtml(key)} <span class="var-changed-badge" title="Variable modified in this step">⚡ UPDATED</span>`
+      const nameHtml = isChanged
+        ? `${escapeHtml(key)} <span class="var-changed-badge" title="Variable modified in this step">CHANGED</span>`
         : escapeHtml(key);
 
       tr.innerHTML = `
@@ -709,9 +616,9 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     if (changedVarsBadge) {
       if (stepIdx === 0) {
-        changedVarsBadge.textContent = 'Initial Scope';
+        changedVarsBadge.textContent = '0 changed';
       } else if (changedCount > 0) {
-        changedVarsBadge.textContent = `⚡ ${changedCount} Changed`;
+        changedVarsBadge.textContent = `${changedCount} changed`;
       } else {
         changedVarsBadge.textContent = 'No Changes';
       }
@@ -798,16 +705,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     return 'auto';
   }
 
-  function renderCallStack(stackArray) {
-    callStackList.innerHTML = '';
-    stackArray.forEach(func => {
-      const tag = document.createElement('span');
-      tag.className = 'stack-tag';
-      tag.textContent = func;
-      callStackList.appendChild(tag);
-    });
-  }
-
   function jumpToStep(idx) {
     if (idx < 0) idx = 0;
     if (idx >= traceSteps.length) idx = traceSteps.length - 1;
@@ -823,9 +720,11 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
 
   function startAutoPlay() {
+    if (traceSteps.length === 0) return;
     isPlaying = true;
-    stepPlayBtn.textContent = '⏸';
-    stepPlayBtn.title = 'Pause Auto Step';
+    stepPlayBtn.innerHTML = '<svg data-pause="true" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5v14m8-14v14"/></svg>';
+    stepPlayBtn.title = 'Pause steps';
+    stepPlayBtn.setAttribute('aria-label', 'Pause steps');
 
     const speed = stepSpeedMs || 800;
     playTimer = setInterval(() => {
@@ -839,8 +738,9 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   function stopAutoPlay() {
     isPlaying = false;
-    stepPlayBtn.textContent = '▶';
-    stepPlayBtn.title = 'Play / Pause Auto Step';
+    stepPlayBtn.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5.8v12.4L18 12 8 5.8Z"/></svg>';
+    stepPlayBtn.title = 'Play steps';
+    stepPlayBtn.setAttribute('aria-label', 'Play steps');
     if (playTimer) {
       clearInterval(playTimer);
       playTimer = null;
@@ -848,15 +748,12 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
 
   function switchState(stateName) {
-    [stateIdle, stateLoading, stateError, stateResult].forEach(el => {
-      el.classList.remove('active');
-      el.classList.add('hidden');
-    });
-
-    if (stateName === 'idle') stateIdle.classList.add('active');
-    if (stateName === 'loading') stateLoading.classList.add('active');
-    if (stateName === 'error') stateError.classList.add('active');
-    if (stateName === 'result') stateResult.classList.add('active');
+    const isLoading = stateName === 'loading';
+    const isError = stateName === 'error';
+    stateLoading.classList.toggle('hidden', !isLoading);
+    stateLoading.classList.toggle('active', isLoading);
+    stateError.classList.toggle('hidden', !isError);
+    stateError.classList.toggle('active', isError);
   }
 
   async function handleExtractedExamples(examples) {
@@ -865,10 +762,6 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     if (!examples || examples.length === 0) {
       exampleSelectorContainer.classList.add('hidden');
-      if (exampleStatusSubtext) {
-        exampleStatusSubtext.textContent = 'No detectable examples found. Enter custom input manually below:';
-        exampleStatusSubtext.classList.remove('hidden');
-      }
 
       const savedInput = await StorageService.getSampleInput(currentProblemSlug);
       if (savedInput) {
@@ -877,9 +770,6 @@ document.addEventListener('DOMContentLoaded', async () => {
       return;
     }
 
-    if (exampleStatusSubtext) {
-      exampleStatusSubtext.classList.add('hidden');
-    }
     exampleSelectorContainer.classList.remove('hidden');
 
     const savedInput = await StorageService.getSampleInput(currentProblemSlug);
@@ -926,4 +816,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       .replace(/"/g, "&quot;")
       .replace(/'/g, "&#039;");
   }
+
+  // Bind controls before the initial page read so visible buttons are immediately active.
+  await readMonacoEditorCode();
 });

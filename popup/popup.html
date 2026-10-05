@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Dry Run - LeetCode C++ Visualizer 🐉</title>
+  <title>Dry Run | LeetCode Tracer</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -13,24 +13,15 @@
   <div class="popup-container">
     
     <!-- 1. SLIM LEFT ICON RAIL -->
-    <aside class="icon-rail">
+    <aside class="icon-rail" aria-label="Primary controls">
       <div class="rail-top">
-        <div class="rail-brand" title="Dry Run C++">
-          <span class="rail-brand-icon">🐉</span>
-        </div>
         <button id="rail-dryrun-btn" class="rail-btn active" title="Dry Run Visualizer">
-          <span class="rail-icon">▶</span>
+          <svg class="rail-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5.8v12.4L18 12 8 5.8Z"/></svg>
           <span class="rail-tooltip">Dry Run</span>
         </button>
         <button id="theme-toggle-btn" class="rail-btn" title="Toggle Dark/Light Mode">
-          <span class="rail-icon">🌙</span>
+          <svg class="rail-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20.2 15.1A8.5 8.5 0 0 1 8.9 3.8 8.5 8.5 0 1 0 20.2 15.1Z"/></svg>
           <span class="rail-tooltip">Theme</span>
-        </button>
-      </div>
-      <div class="rail-bottom">
-        <button id="open-devtools-link" class="rail-btn" title="DevTools Panel 🛠️">
-          <span class="rail-icon">🛠️</span>
-          <span class="rail-tooltip">DevTools</span>
         </button>
       </div>
     </aside>
@@ -38,77 +29,43 @@
     <!-- 2. MAIN WORKSPACE CONTAINER -->
     <main class="main-workspace">
 
-      <!-- TOP SEARCH-STYLE BAR -->
+      <!-- Problem identity -->
       <header class="top-bar">
         <div class="top-left-group">
+          <span class="brand-mark" aria-hidden="true">
+            <svg viewBox="0 0 24 24"><path d="M12 3.2 4.5 7.4v9.2l7.5 4.2 7.5-4.2V7.4L12 3.2Z"/><path d="m9 9 6 6m0-6-6 6"/></svg>
+          </span>
           <div class="problem-meta-pill">
-            <span class="meta-tag">LeetCode</span>
             <h2 id="problem-title" class="problem-name-text">Detecting Problem...</h2>
           </div>
           <span id="connection-status" class="status-indicator-pill" title="Editor Status">
-            <span class="status-dot"></span> Online
+            <span class="status-dot"></span><span id="connection-status-text">Checking editor</span>
           </span>
-        </div>
-
-        <div class="top-center-search">
-          <div class="search-input-wrapper">
-            <span class="search-icon">📥</span>
-            <textarea id="sample-input" class="search-input-box" placeholder="nums = [2,7,11,15], target = 9" rows="1"></textarea>
-          </div>
-          <div id="example-selector-container" class="example-selector-container">
-            <!-- Dynamic Example buttons inserted here -->
-          </div>
-          <button id="clear-input-btn" class="clear-pill-btn" title="Clear input">Clear</button>
-        </div>
-
-        <div class="top-right-actions">
-          <button id="fetch-code-btn" class="btn-pill-secondary" title="Re-fetch solution from LeetCode Monaco Editor">
-            🔄 Read Editor
-          </button>
-          <button id="start-dryrun-btn" class="btn-circle-run" title="Start Step-by-Step Dry Run">
-            ▶
-          </button>
         </div>
       </header>
 
-      <div id="example-status-subtext" class="example-status-subtext hidden"></div>
-
-      <!-- 🔍 VERIFICATION PREVIEW BANNER (Collapsible) -->
-      <section id="verification-banner" class="verification-banner hidden">
-        <div class="verification-header">
-          <div class="verification-title">
-            <span>🔍 Live Editor Code Verification</span>
-          </div>
-          <button id="verify-play-btn" class="btn-verify-play">▶ Play</button>
-        </div>
-        <div class="verification-stats">
-          <div class="stat-item">
-            <span class="stat-label">Language:</span>
-            <span id="verify-lang-badge" class="stat-value highlight-lang">C++</span>
-          </div>
-          <div class="stat-item">
-            <span class="stat-label">Code Length:</span>
-            <span id="verify-length-badge" class="stat-value">0 chars (0 lines)</span>
-          </div>
-        </div>
-        <div class="verification-preview-box">
-          <pre id="verify-code-snippet" class="code-snippet-pre">// Code preview will appear here...</pre>
-        </div>
-      </section>
-
-      <!-- 📝 MANUAL CODE FALLBACK SECTION -->
-      <section id="manual-fallback-section" class="manual-fallback-bar hidden">
-        <div class="fallback-header">
-          <span class="fallback-icon">📋</span>
-          <label for="manual-code-input" class="fallback-label">Manual C++ Code Input (Monaco Fallback):</label>
-        </div>
-        <textarea id="manual-code-input" placeholder="#include <vector>&#10;using namespace std;&#10;class Solution { ... };" rows="3"></textarea>
-        <button id="use-manual-code-btn" class="btn-primary-glow">
-          ✅ Load Manual Code
+      <!-- Testcase and editor actions -->
+      <section class="input-bar" aria-label="Testcase input">
+        <label class="search-input-wrapper" for="sample-input">
+          <svg class="input-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5.5h16v13H4zM8 9h8M8 12h5M8 15h7"/></svg>
+          <textarea id="sample-input" class="search-input-box" placeholder="Enter testcase input" rows="1" aria-label="Sample testcase input"></textarea>
+        </label>
+        <div id="example-selector-container" class="example-selector-container" aria-label="Examples"></div>
+        <button id="clear-input-btn" class="clear-pill-btn" title="Clear input">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg><span>Clear</span>
         </button>
+        <div class="top-right-actions">
+          <button id="fetch-code-btn" class="btn-pill-secondary" title="Read code from the LeetCode editor">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 7v5h-5M4 17v-5h5"/><path d="M5.5 9A7 7 0 0 1 18 6l2 2M4 16l2 2a7 7 0 0 0 12.5-3"/></svg>
+            <span>Read Editor</span>
+          </button>
+          <button id="start-dryrun-btn" class="btn-circle-run" title="Run dry trace" aria-label="Run dry trace">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5.8v12.4L18 12 8 5.8Z"/></svg>
+          </button>
+        </div>
       </section>
 
-      <!-- 📊 STAT CARDS ROW (Bento Header Row) -->
+      <!-- Stat cards -->
       <section class="stat-cards-grid">
         <!-- 1. Current Step Card (Near-Black Emphasis Card) -->
         <div class="stat-card black-card">
@@ -131,92 +88,66 @@
         <div class="stat-card">
           <span class="stat-label">LANGUAGE</span>
           <div class="stat-value-group">
-            <span id="detected-lang-chip" class="lang-pill">C++</span>
+            <span id="detected-lang-chip" class="lang-pill">Not read</span>
           </div>
         </div>
 
         <!-- 4. Variables Changed Card -->
         <div class="stat-card">
-          <span class="stat-label">VARIABLE SCOPE</span>
+          <span class="stat-label">VARIABLES CHANGED</span>
           <div class="stat-value-group">
-            <span id="changed-vars-badge" class="scope-pill">Initial Scope</span>
+            <span id="changed-vars-badge" class="scope-pill">0 changed</span>
           </div>
         </div>
       </section>
 
-      <!-- 📺 RESULT STATES AREA -->
+      <!-- Result workspace -->
       <section id="result-area" class="result-workspace">
 
         <!-- 1. IDLE STATE -->
-        <div id="state-idle" class="state-container active">
-          <div class="idle-card">
-            <div class="idle-icon-circle">🐉</div>
-            <h3>Ready for Step-by-Step Dry Run</h3>
-            <p>Select an example testcase or enter sample input above, then click the crimson circular <strong>▶ Run</strong> button to trace your code line-by-line.</p>
-          </div>
-        </div>
-
-        <!-- 2. LOADING STATE (With Shimmer Skeleton) -->
+        <!-- Loading shimmer -->
         <div id="state-loading" class="state-container hidden">
           <div class="loading-bento-card">
-            <div class="loading-top-status">
-              <span class="spinner-dot"></span>
-              <h3 id="loading-message">Tracing C++ Execution with Gemini AI...</h3>
-            </div>
+            <div class="loading-top-status"><span class="spinner-dot"></span><h3 id="loading-message">Tracing with Gemini...</h3></div>
             <div class="skeleton-grid">
-              <div class="skeleton-box code-skeleton">
-                <div class="skeleton-line w-60"></div>
-                <div class="skeleton-line w-80"></div>
-                <div class="skeleton-line w-40"></div>
-                <div class="skeleton-line w-90"></div>
-                <div class="skeleton-line w-70"></div>
-              </div>
-              <div class="skeleton-box var-skeleton">
-                <div class="skeleton-row"></div>
-                <div class="skeleton-row"></div>
-                <div class="skeleton-row"></div>
-              </div>
+              <div class="skeleton-box"><div class="skeleton-line w-80"></div><div class="skeleton-line w-60"></div><div class="skeleton-line w-90"></div><div class="skeleton-line w-40"></div><div class="skeleton-line w-70"></div></div>
+              <div class="skeleton-box"><div class="skeleton-row"></div><div class="skeleton-row"></div><div class="skeleton-row"></div><div class="skeleton-row"></div></div>
             </div>
           </div>
         </div>
 
-        <!-- 3. ERROR RESULT STATE -->
+        <!-- Error overlay -->
         <div id="state-error" class="state-container hidden">
           <div class="error-bento-card">
-            <div class="error-badge-icon">⚠️</div>
+            <svg class="error-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 2.8 19h18.4L12 3Z"/><path d="M12 9v4m0 3h.01"/></svg>
             <h3>Dry Run Execution Error</h3>
             <p id="error-message-text" class="error-text">Failed to execute dry run.</p>
             <div class="error-actions-group">
-              <button id="error-retry-btn" class="btn-pill-secondary">🔄 Try Again</button>
+              <button id="error-retry-btn" class="btn-pill-secondary"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 7v5h-5M4 17v-5h5"/><path d="M5.5 9A7 7 0 0 1 18 6l2 2M4 16l2 2a7 7 0 0 0 12.5-3"/></svg><span>Try Again</span></button>
             </div>
           </div>
         </div>
 
-        <!-- 4. STEP-BY-STEP RESULT STATE -->
-        <div id="state-result" class="state-container hidden">
-          
-          <!-- BENTO MAIN GRID (Two Columns: Code & Variables) -->
+        <!-- Code and variables workspace -->
+        <div id="state-result" class="workspace-content">
           <div class="bento-main-grid">
-
-            <!-- Left Column: "Your Code" Card -->
             <div class="bento-card code-bento-card">
               <div class="card-header">
                 <div class="title-group">
-                  <span class="header-icon">💻</span>
-                  <span class="header-title">Your Code</span>
+                  <svg class="header-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m8 7-5 5 5 5m8-10 5 5-5 5m-2-12-4 14"/></svg>
+                  <span class="header-title">Code</span>
                 </div>
-                <span id="active-line-indicator" class="active-line-pill">Line 1</span>
+                <span id="active-line-indicator" class="active-line-pill">No line</span>
               </div>
               <div id="code-lines-box" class="code-lines-container">
-                <!-- Line elements dynamically inserted here -->
+                <div id="code-empty-state" class="code-empty-state">Click Read Editor</div>
               </div>
             </div>
 
-            <!-- Right Column: "Variables" Card -->
             <div class="bento-card variables-bento-card">
               <div class="card-header">
                 <div class="title-group">
-                  <span class="header-icon">📊</span>
+                  <svg class="header-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 19V5m0 14h16M8 15v-4m4 4V7m4 8v-6"/></svg>
                   <span class="header-title">Variables</span>
                 </div>
               </div>
@@ -238,56 +169,27 @@
 
           </div>
 
-          <!-- STEP EXPLANATION & TAB SEGMENTED CONTROLS BAR -->
-          <div class="explanation-tab-row">
+          <div class="explanation-output-row">
             <div class="explanation-bento-card">
-              <div class="avatar-icon">🐉</div>
-              <span id="line-num-badge" class="line-pill">Line 1</span>
-              <p id="step-explanation" class="explanation-text-content">Initial state before function execution.</p>
-            </div>
-
-            <!-- Segmented Control Tabs -->
-            <div class="segmented-control-bar">
-              <button id="tab-trace-btn" class="segmented-tab active" data-tab="trace">Trace</button>
-              <button id="tab-vars-btn" class="segmented-tab" data-tab="vars">Variables</button>
-              <button id="tab-output-btn" class="segmented-tab" data-tab="output">Output</button>
-            </div>
-          </div>
-
-          <!-- CALL STACK & CONSOLE OUTPUT ROW -->
-          <div id="stack-output-section" class="stack-output-row">
-            <div class="stack-mini-card">
-              <span class="mini-label">Call Stack:</span>
-              <div id="call-stack-list" class="call-stack-tags">
-                <span class="stack-chip">Solution::solve()</span>
-              </div>
+              <svg class="explanation-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3a8 8 0 0 0-4.7 14.5c.8.6 1.2 1.3 1.2 2.2h7c0-.9.4-1.6 1.2-2.2A8 8 0 0 0 12 3Z"/><path d="M9.5 22h5m-4.5-6h4"/></svg>
+              <div class="explanation-copy"><span id="line-num-badge" class="line-pill">Waiting</span><p id="step-explanation" class="explanation-text-content">Read the editor and run a testcase to see the trace.</p></div>
             </div>
             <div class="output-mini-card">
-              <span class="mini-label">Step Output:</span>
+              <div class="output-card-heading"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4h14v16H5zM8 8h8m-8 4h8m-8 4h5"/></svg><span>Output</span></div>
               <div id="output-text" class="output-text-value">--</div>
             </div>
           </div>
-
-          <!-- 🏁 FINAL EXECUTION OUTPUT CARD (Near-Black Rounded Card) -->
-          <div id="final-output-card" class="final-output-bento-card hidden">
-            <div class="final-output-header">
-              <span class="final-badge">🏁 FINAL PROGRAM OUTPUT</span>
-            </div>
-            <pre id="final-output-text" class="final-output-monospace">--</pre>
-          </div>
-
         </div>
 
       </section>
 
-      <!-- 🎮 BOTTOM CONTROL BAR WITH STEP DOTS PROGRESS & CIRCULAR BUTTONS -->
       <footer class="bottom-control-bar">
         <div class="step-buttons-circle-group">
-          <button id="step-first" class="circle-btn" title="First Step (Home)">⏮</button>
-          <button id="step-prev" class="circle-btn" title="Previous Step (Left Arrow)">◀</button>
-          <button id="step-play" class="circle-btn play-circle-btn" title="Play / Pause Auto Step (Space)">▶</button>
-          <button id="step-next" class="circle-btn" title="Next Step (Right Arrow)">▶</button>
-          <button id="step-last" class="circle-btn" title="Last Step (End)">⏭</button>
+          <button id="step-first" class="circle-btn" title="First step" aria-label="First step"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 5v14m12-12L8 12l10 5V7Z"/></svg></button>
+          <button id="step-prev" class="circle-btn" title="Previous step" aria-label="Previous step"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg></button>
+          <button id="step-play" class="circle-btn play-circle-btn" title="Play steps" aria-label="Play steps"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5.8v12.4L18 12 8 5.8Z"/></svg></button>
+          <button id="step-next" class="circle-btn" title="Next step" aria-label="Next step"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg></button>
+          <button id="step-last" class="circle-btn" title="Last step" aria-label="Last step"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 5v14M6 7l10 5-10 5V7Z"/></svg></button>
         </div>
 
         <div class="step-timeline-container">
