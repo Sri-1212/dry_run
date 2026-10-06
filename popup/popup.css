@@ -1629,3 +1629,56 @@ button:focus-visible, textarea:focus-visible, input:focus-visible { outline: 2px
   .explanation-bento-card, .output-mini-card { height: 68px; }
   .bottom-control-bar { flex-basis: 38px; height: 38px; }
 }
+
+.main-workspace {
+  gap: 6px;
+  padding-bottom: 5px;
+}
+
+.btn-circle-run:disabled {
+  opacity: 0.62;
+  cursor: wait;
+  transform: none;
+  box-shadow: none;
+}
+
+.disclaimer-footer {
+  flex: 0 0 11px;
+  height: 11px;
+  overflow: hidden;
+  color: var(--text-muted);
+  font-size: 8px;
+  line-height: 11px;
+  text-align: center;
+  white-space: nowrap;
+}
+
+.workspace-content.step-transition .bento-main-grid {
+  animation: step-fade-slide 220ms ease both;
+}
+
+.workspace-content.step-transition .explanation-output-row {
+  animation: step-fade-slide 260ms ease both;
+}
+
+.var-row-changed.variable-flash {
+  animation: variable-flash 850ms ease-out both;
+}
+
+@keyframes step-fade-slide {
+  from { opacity: 0.45; transform: translateY(5px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes variable-flash {
+  0% { background-color: rgba(227, 66, 91, 0.34); }
+  100% { background-color: rgba(227, 66, 91, 0.09); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .workspace-content.step-transition .bento-main-grid,
+  .workspace-content.step-transition .explanation-output-row,
+  .var-row-changed.variable-flash {
+    animation-duration: 1ms;
+  }
+}

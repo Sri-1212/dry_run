@@ -1,57 +1,27 @@
-# 🐉 Dry Run - LeetCode C++ Step-by-Step Debugger & AI Visualizer
+# DryRun
 
-A modern Chrome Extension (Manifest V3) for **LeetCode** that connects directly to LeetCode's live Monaco Editor in `world: 'MAIN'`, extracts your C++ solution code, and generates AI-powered line-by-line execution traces using the **Gemini API** directly from the background service worker.
+DryRun traces your LeetCode C++ code line by line so you can inspect how each testcase changes variables and output.
 
----
+## How It Works
 
-## ✨ Features
+DryRun reads the code from LeetCode's Monaco editor, loads the problem's sample testcases, and sends the selected code and input to Gemini from the extension service worker. Gemini returns a structured trace, which DryRun validates and displays in an interactive step player.
 
-1. **Background Service Worker Gemini AI Tracer**:
-   - Executes Gemini API calls strictly inside the background service worker (`background.js`), keeping API key handling and network logic off the popup thread.
-   - Strictly enforces the AI Tracing Contract:
-     ```json
-     {
-       "steps": [
-         {
-           "step": 1,
-           "line": 5,
-           "explanation": "short explanation",
-           "variables": { "i": 0, "sum": 0 }
-         }
-       ],
-       "output": "final return value or output description"
-     }
-     ```
-   - Traces the user's exact C++ code without modifying, fixing, suggesting better algorithms, or providing solutions.
-   - Correctly tracks line numbers, primitives, vectors, arrays, strings, maps, sets, and stacks.
-   - Enforces a 40-step limit and merges repetitive loop iterations.
+DryRun traces code and never gives solutions. It does not provide hints, fixes, optimal approaches, complexity analysis, or correctness judgments. Bugs are traced as written.
 
-2. **Secure `chrome.storage.local` API Key Management**:
-   - Save your Gemini API key in Settings (⚙️).
-   - Saved securely in `chrome.storage.local`. Never hardcoded in source code and never committed to Git.
+## Scope
 
-3. **Direct Monaco Editor Reader (`world: 'MAIN'`)**:
-   - Uses `chrome.scripting.executeScript` to query active Monaco editor models via `model.getLanguageId()` and `model.getValue()`.
-   - Strictly validates C++ language and throws `"Support C++ only"` if non-C++ is selected.
+- Platform: LeetCode problem pages
+- Language: C++
+- Traces: Up to 30 validated steps, with repetitive loop iterations merged
 
-4. **Reliable Manual Fallback & UI Verification**:
-   - Paste C++ code manually if Monaco cannot be accessed.
-   - Verification banner displays **Language Badge**, **Code Length**, and **Line Preview** before running.
+## Install
 
-5. **Built-in Local Interpreter Fallback**:
-   - Fallback to the client-side simulator if no API key is provided or if offline.
+1. Copy `config.example.js` to `config.js` in the project folder.
+2. Add your Gemini API key to `GEMINI_API_KEY` in `config.js`. Keep this file private; it is excluded by `.gitignore`.
+3. Open `chrome://extensions` and turn on **Developer mode**.
+4. Choose **Load unpacked** and select the DryRun project folder.
+5. Open a LeetCode C++ problem, open the DryRun extension, click **Read Editor**, select an example, then click **Run**.
 
----
+## Attribution
 
-## 🚀 Setup & Usage Guide
-
-1. Open Chrome and navigate to `chrome://extensions`.
-2. Enable **Developer mode** (top-right toggle).
-3. Click **Load unpacked** and select the folder:
-   ```text
-   c:\Users\nayak\OneDrive\Desktop\dryrun-leetcode
-   ```
-4. Open any LeetCode C++ problem (e.g. `https://leetcode.com/problems/two-sum/`).
-5. Click the **Dry Run 🐉** extension icon.
-6. Open **Settings (⚙️)**, paste your **Gemini API Key**, and it will display **`✅ Key Saved`**.
-7. Click **START STEP-BY-STEP DRY RUN** to trace your solution step by step!
+DryRun was built entirely by voice using Wispr Flow.

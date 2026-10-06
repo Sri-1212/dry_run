@@ -40,6 +40,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   const lineNumBadge = document.getElementById('line-num-badge');
   const stepExplanation = document.getElementById('step-explanation');
   const codeLinesBox = document.getElementById('code-lines-box');
+  const workspaceContent = document.getElementById('state-result');
   const activeLineIndicator = document.getElementById('active-line-indicator');
   const changedVarsBadge = document.getElementById('changed-vars-badge');
   const variableTableBody = document.getElementById('variable-table-body');
@@ -148,7 +149,8 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     } catch (err) {
       console.error("[DryRun] Monaco read error:", err);
-      showError(`Monaco Access Error: ${err.message}`);
+      connectionStatusText.textContent = 'Editor unavailable';
+      showError(`Could not read editor. ${err.message}`);
     }
   }
 
@@ -439,61 +441,77 @@ document.addEventListener('DOMContentLoaded', async () => {
   // --------------------------------------------------------------------------
 
   async function startDryRun() {
+    if (startDryRunBtn.disabled) return;
     stopAutoPlay();
+    startDryRunBtn.disabled = true;
 
-    if (!extractedCppCode || extractedCppCode.trim().length === 0) {
-      await readMonacoEditorCode();
+    try {
       if (!extractedCppCode || extractedCppCode.trim().length === 0) {
-        showError("No solution code found. Please open a LeetCode problem with code in the editor.");
+        await readMonacoEditorCode();
+        if (!extractedCppCode || extractedCppCode.trim().length === 0) {
+          showError('Could not read editor. Click Read Editor on a LeetCode problem page and try again.');
+          return;
+        }
+      }
+
+      switchState('loading');
+      loadingMessage.textContent = 'Tracing your code...';
+
+      const response = await new Promise((resolve) => {
+        try {
+          chrome.runtime.sendMessage({
+            action: 'GENERATE_AI_TRACE',
+            code: extractedCppCode,
+            language: detectedLanguage,
+            input: sampleInputArea.value
+          }, (result) => {
+            const runtimeError = chrome.runtime.lastError;
+            resolve(runtimeError
+              ? { success: false, error: runtimeError.message }
+              : (result || { success: false, error: 'Service worker did not respond.' }));
+          });
+        } catch (error) {
+          resolve({ success: false, error: error.message || 'Could not contact the service worker.' });
+        }
+      });
+
+      if (!response.success) {
+        showError(response.error || 'Failed to generate AI execution trace.');
         return;
       }
+
+      const traceData = response.trace;
+      traceSteps = Array.isArray(traceData?.steps) ? traceData.steps.slice(0, 30) : [];
+      finalTraceOutput = traceData?.output || 'Execution completed';
+
+      if (traceSteps.length === 0) {
+        showError('Gemini returned no valid trace steps. Try again.');
+        return;
+      }
+
+      traceSteps[traceSteps.length - 1].output = finalTraceOutput;
+      currentStepIndex = 0;
+      stepSlider.max = traceSteps.length;
+      totalStepsNumEl.textContent = traceSteps.length;
+
+      renderCodeViewer(extractedCppCode);
+      renderStep(currentStepIndex);
+      switchState('result');
+    } catch (error) {
+      console.error('[DryRun] Trace request failed:', error);
+      showError(error.message || 'Network failure while requesting a trace. Try again.');
+    } finally {
+      startDryRunBtn.disabled = false;
     }
-
-    switchState('loading');
-
-    const input = sampleInputArea.value;
-    loadingMessage.textContent = 'Tracing testcase with Gemini...';
-
-    // Call Background Service Worker to execute Gemini AI tracing
-    const response = await new Promise((resolve) => {
-      chrome.runtime.sendMessage({
-        action: 'GENERATE_AI_TRACE',
-        code: extractedCppCode,
-        language: detectedLanguage,
-        input: input
-      }, (res) => resolve(res || { success: false, error: "Service Worker did not respond." }));
-    });
-
-    if (!response.success) {
-      showError(response.error || "Failed to generate AI execution trace.");
-      return;
-    }
-
-    const traceData = response.trace;
-    traceSteps = Array.isArray(traceData?.steps) ? traceData.steps : [];
-    finalTraceOutput = traceData.output || "Execution completed";
-
-    if (traceSteps.length === 0) {
-      showError("AI generated an empty execution trace.");
-      return;
-    }
-
-    // Attach overall output to last step
-    traceSteps[traceSteps.length - 1].output = finalTraceOutput;
-
-    currentStepIndex = 0;
-    stepSlider.max = traceSteps.length;
-    totalStepsNumEl.textContent = traceSteps.length;
-
-    renderCodeViewer(extractedCppCode);
-    renderStep(currentStepIndex);
-    switchState('result');
   }
 
   function renderStep(idx) {
     if (idx < 0 || idx >= traceSteps.length) return;
     currentStepIndex = idx;
     const step = traceSteps[idx];
+    workspaceContent.classList.remove('step-transition');
+    void workspaceContent.offsetWidth;
+    workspaceContent.classList.add('step-transition');
 
     currentStepNumEl.textContent = `Step ${idx + 1}`;
     totalStepsNumEl.textContent = `${traceSteps.length}`;
@@ -597,7 +615,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
       if (isChanged) {
         changedCount++;
-        tr.className = 'var-row-changed';
+        tr.className = 'var-row-changed variable-flash';
       }
 
       const typeStr = getTypeStr(val);
@@ -620,7 +638,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       } else if (changedCount > 0) {
         changedVarsBadge.textContent = `${changedCount} changed`;
       } else {
-        changedVarsBadge.textContent = 'No Changes';
+        changedVarsBadge.textContent = '0 changed';
       }
     }
   }
