@@ -1,6 +1,6 @@
 # DryRun
 
-DryRun traces your LeetCode C++ code line by line so you can inspect how each testcase changes variables and output.
+DryRun traces your LeetCode C++ code line by line so you can inspect how each testcase changes variables and output.it helps u to dry run your code 
 
 ## How It Works
 
